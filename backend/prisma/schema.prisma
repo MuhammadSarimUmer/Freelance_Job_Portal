@@ -1,0 +1,213 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  BUSY
+  UNAVAILABLE
+}
+
+enum ProficiencyLevel {
+  BEGINNER
+  INTERMEDIATE
+  EXPERT
+}
+
+enum ContractStatus {
+  DRAFT
+  SIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  IN_REVIEW
+  COMPLETED
+}
+
+enum PaymentStatus {
+  PENDING
+  DEPOSITED
+  RELEASED
+  REFUNDED
+}
+
+enum BugSeverity {
+  LOW
+  MINOR
+  MAJOR
+  CRITICAL
+}
+
+enum BugStatus {
+  REPORTED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model User {
+  userID           String        @id @default(uuid())
+  fullName         String
+  email            String        @unique
+  passwordHash     String
+  phoneNumber      String?
+  registrationDate DateTime      @default(now())
+  accountStatus    AccountStatus @default(ACTIVE)
+  developer        Developer?
+  client           Client?
+}
+
+model Developer {
+  developerID        String                @id @default(uuid())
+  userID             String                @unique
+  experienceYears    Int                   @default(0)
+  hourlyRate         Decimal               @db.Decimal(10, 2)
+  portfolioURL       String?
+  availabilityStatus AvailabilityStatus    @default(AVAILABLE)
+  user               User                  @relation(fields: [userID], references: [userID], onDelete: Cascade)
+  knownTechs         DeveloperTechnology[]
+  assignedProjects   ContractAssignment[]
+}
+
+model Client {
+  clientID       String            @id @default(uuid())
+  userID         String            @unique
+  companyName    String?
+  billingAddress String?
+  country        String
+  user           User              @relation(fields: [userID], references: [userID], onDelete: Cascade)
+  contracts      ProjectContract[]
+}
+
+model TechnologyStack {
+  techID     String                @id @default(uuid())
+  techName   String                @unique
+  category   String
+  version    String?
+  developers DeveloperTechnology[]
+  contracts  ContractTechnology[]
+}
+
+model DeveloperTechnology {
+  developerID      String
+  techID           String
+  proficiencyLevel ProficiencyLevel
+  yearsExperience  Int              @default(0)
+  developer        Developer        @relation(fields: [developerID], references: [developerID], onDelete: Cascade)
+  tech             TechnologyStack  @relation(fields: [techID], references: [techID], onDelete: Cascade)
+
+  @@id([developerID, techID])
+}
+
+model Application {
+  appID          String            @id @default(uuid())
+  appName        String
+  appType        String
+  description    String?           @db.Text
+  createdDate    DateTime          @default(now())
+  currentVersion String            @default("1.0.0")
+  contracts      ProjectContract[]
+}
+
+model ProjectContract {
+  contractID   String               @id @default(uuid())
+  clientID     String
+  appID        String
+  title        String
+  description  String               @db.Text
+  startDate    DateTime
+  endDate      DateTime?
+  totalAmount  Decimal              @db.Decimal(12, 2)
+  status       ContractStatus       @default(DRAFT)
+  signedDate   DateTime?
+  client       Client               @relation(fields: [clientID], references: [clientID], onDelete: Restrict)
+  application  Application          @relation(fields: [appID], references: [appID], onDelete: Restrict)
+  assignments  ContractAssignment[]
+  technologies ContractTechnology[]
+  milestones   Milestone[]
+  bugReports   BugReport[]
+}
+
+model ContractAssignment {
+  assignmentID           String          @id @default(uuid())
+  developerID            String
+  contractID             String
+  role                   String
+  assignedDate           DateTime        @default(now())
+  contributionPercentage Decimal         @db.Decimal(5, 2)
+  paymentShare           Decimal         @db.Decimal(5, 2)
+  developer              Developer       @relation(fields: [developerID], references: [developerID], onDelete: Restrict)
+  contract               ProjectContract @relation(fields: [contractID], references: [contractID], onDelete: Cascade)
+
+  @@unique([developerID, contractID])
+}
+
+model ContractTechnology {
+  contractID    String
+  techID        String
+  purpose       String?
+  requiredLevel ProficiencyLevel
+  contract      ProjectContract  @relation(fields: [contractID], references: [contractID], onDelete: Cascade)
+  tech          TechnologyStack  @relation(fields: [techID], references: [techID], onDelete: Restrict)
+
+  @@id([contractID, techID])
+}
+
+model Milestone {
+  milestoneID     String          @id @default(uuid())
+  contractID      String
+  title           String
+  description     String          @db.Text
+  dueDate         DateTime
+  completeDate    DateTime?
+  milestoneAmount Decimal         @db.Decimal(10, 2)
+  status          MilestoneStatus @default(PENDING)
+  contract        ProjectContract @relation(fields: [contractID], references: [contractID], onDelete: Cascade)
+  escrow          PaymentEscrow?
+}
+
+model PaymentEscrow {
+  escrowID             String        @id @default(uuid())
+  milestoneID          String        @unique
+  depositAmount        Decimal       @db.Decimal(10, 2)
+  depositDate          DateTime      @default(now())
+  releaseDate          DateTime?
+  paymentStatus        PaymentStatus @default(PENDING)
+  transactionReference String?       @unique
+  milestone            Milestone     @relation(fields: [milestoneID], references: [milestoneID], onDelete: Restrict)
+}
+
+model BugReport {
+  bugID        String          @id @default(uuid())
+  contractID   String
+  title        String
+  description  String          @db.Text
+  severity     BugSeverity
+  status       BugStatus       @default(REPORTED)
+  createdDate  DateTime        @default(now())
+  resolvedDate DateTime?
+  contract     ProjectContract @relation(fields: [contractID], references: [contractID], onDelete: Cascade)
+}
