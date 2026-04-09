@@ -1,0 +1,1284 @@
+{
+    "info": {
+        "name": "Freelance Portal v2",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "1. Authentication",
+            "item": [
+                {
+                    "name": "1.1 Register Developer",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if(jsonData.token) {",
+                                    "    pm.collectionVariables.set('jwt_token', jsonData.token);",
+                                    "    pm.collectionVariables.set('dev_token', jsonData.token);",
+                                    "}",
+                                    "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                                    "pm.test('Has token', () => pm.expect(jsonData.token).to.exist);",
+                                    "pm.test('No passwordHash leaked', () => pm.expect(jsonData.user.passwordHash).to.be.undefined);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"fullName\": \"Tony Stark\",\n    \"email\": \"tony@stark.com\",\n    \"password\": \"securepass123\",\n    \"role\": \"DEVELOPER\",\n    \"phoneNumber\": \"+12025551234\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/register",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "register"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "1.2 Register Client",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if(jsonData.token) {",
+                                    "    pm.collectionVariables.set('client_token', jsonData.token);",
+                                    "}",
+                                    "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                                    "pm.test('Has token', () => pm.expect(jsonData.token).to.exist);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"fullName\": \"Bruce Wayne\",\n    \"email\": \"bruce@wayne.com\",\n    \"password\": \"securepass123\",\n    \"role\": \"CLIENT\",\n    \"country\": \"USA\",\n    \"phoneNumber\": \"+12025559876\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/register",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "register"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "1.3 Register — Duplicate Email (expect 409)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 409', () => pm.response.to.have.status(409));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"fullName\": \"Tony Stark\",\n    \"email\": \"tony@stark.com\",\n    \"password\": \"securepass123\",\n    \"role\": \"DEVELOPER\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/register",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "register"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "1.4 Register — Validation Fail (expect 400)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                                    "pm.test('Has errors array', () => pm.expect(pm.response.json().errors).to.be.an('array'));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"fullName\": \"\",\n    \"email\": \"not-an-email\",\n    \"password\": \"short\",\n    \"role\": \"INVALID\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/register",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "register"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "1.5 Login Developer (auto-sets token)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if(jsonData.token) {",
+                                    "    pm.collectionVariables.set('jwt_token', jsonData.token);",
+                                    "    pm.collectionVariables.set('dev_token', jsonData.token);",
+                                    "}",
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('No passwordHash leaked', () => pm.expect(jsonData.user.passwordHash).to.be.undefined);",
+                                    "pm.test('Has developer relation', () => pm.expect(jsonData.user.developer).to.exist);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"tony@stark.com\",\n    \"password\": \"securepass123\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "login"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "1.6 Login Client (auto-sets token)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if(jsonData.token) {",
+                                    "    pm.collectionVariables.set('jwt_token', jsonData.token);",
+                                    "    pm.collectionVariables.set('client_token', jsonData.token);",
+                                    "}",
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('Has client relation', () => pm.expect(jsonData.user.client).to.exist);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"bruce@wayne.com\",\n    \"password\": \"securepass123\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "login"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "1.7 Login — Wrong Password (expect 401)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"tony@stark.com\",\n    \"password\": \"wrongpassword\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "login"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "1.8 Get Me",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('Has user object', () => pm.expect(jsonData.user).to.exist);",
+                                    "pm.test('No passwordHash', () => pm.expect(jsonData.user.passwordHash).to.be.undefined);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/auth/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "me"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "1.9 Get Me — No Token (expect 401)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/auth/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "me"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "1.10 Refresh Token",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if(jsonData.token) {",
+                                    "    pm.collectionVariables.set('jwt_token', jsonData.token);",
+                                    "}",
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('Has new token', () => pm.expect(jsonData.token).to.exist);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/auth/refresh",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "refresh"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "1.11 Logout",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/auth/logout",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "logout"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "1.12 Forgot Password",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"tony@stark.com\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/forgot-password",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "forgot-password"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "1.13 Forgot Password — Nonexistent Email (still 200)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 200 (no email enumeration)', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"nobody@nowhere.com\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/forgot-password",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "forgot-password"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "1.14 404 Unknown Route",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 404', () => pm.response.to.have.status(404));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/nonexistent",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "nonexistent"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "2. Developer Profiles",
+            "item": [
+                {
+                    "name": "2.1 Get All Developers",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('Data is array', () => pm.expect(jsonData.data).to.be.an('array'));",
+                                    "if(jsonData.data.length > 0) {",
+                                    "    pm.collectionVariables.set('developer_id', jsonData.data[0].developerID);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/profiles/developers",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "developers"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "2.2 Get Developers — Filter by Status",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/profiles/developers?status=AVAILABLE",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "developers"
+                            ],
+                            "query": [
+                                {
+                                    "key": "status",
+                                    "value": "AVAILABLE"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "2.3 Get Developers — Invalid Status (expect 400)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/profiles/developers?status=INVALID",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "developers"
+                            ],
+                            "query": [
+                                {
+                                    "key": "status",
+                                    "value": "INVALID"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "2.4 Get Developers — Filter by minExperience",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/profiles/developers?minExperience=2",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "developers"
+                            ],
+                            "query": [
+                                {
+                                    "key": "minExperience",
+                                    "value": "2"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "2.5 Get Developers — Invalid minExperience (expect 400)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/profiles/developers?minExperience=abc",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "developers"
+                            ],
+                            "query": [
+                                {
+                                    "key": "minExperience",
+                                    "value": "abc"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "2.6 Get Developer by ID",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/profiles/developers/{{developer_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "developers",
+                                "{{developer_id}}"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "2.7 Update Developer Me — All Fields",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('Has user with phoneNumber', () => pm.expect(jsonData.data.user.phoneNumber).to.exist);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{dev_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"fullName\": \"Tony Stark Updated\",\n    \"phoneNumber\": \"+14155551234\",\n    \"hourlyRate\": 150.00,\n    \"portfolioURL\": \"https://tonystark.dev\",\n    \"availabilityStatus\": \"BUSY\",\n    \"experienceYears\": 12\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/profiles/developers/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "developers",
+                                "me"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "2.8 Update Developer Me — Partial (only hourlyRate)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{dev_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"hourlyRate\": 200.00\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/profiles/developers/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "developers",
+                                "me"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "2.9 Update Developer Me — Validation Fail (expect 400)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{dev_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"hourlyRate\": -50,\n    \"experienceYears\": 999,\n    \"availabilityStatus\": \"SLEEPING\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/profiles/developers/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "developers",
+                                "me"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "2.10 Update Developer Me — Client Token (expect 403)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 403', () => pm.response.to.have.status(403));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{client_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"hourlyRate\": 100\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/profiles/developers/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "developers",
+                                "me"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "3. Client Profiles",
+            "item": [
+                {
+                    "name": "3.1 Get Client by ID",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 200 or 404', () => [200, 404].includes(pm.response.code));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/profiles/clients/{{client_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "clients",
+                                "{{client_id}}"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "3.2 Update Client Me — All Fields",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('Has user with phoneNumber', () => pm.expect(jsonData.data.user.phoneNumber).to.exist);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{client_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"fullName\": \"Bruce Wayne Updated\",\n    \"phoneNumber\": \"+14155559876\",\n    \"companyName\": \"Wayne Enterprises\",\n    \"billingAddress\": \"1007 Mountain Drive, Gotham\",\n    \"country\": \"USA\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/profiles/clients/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "clients",
+                                "me"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "3.3 Update Client Me — Partial (only companyName)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{client_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"companyName\": \"Wayne Industries\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/profiles/clients/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "clients",
+                                "me"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "3.4 Update Client Me — Dev Token (expect 403)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 403', () => pm.response.to.have.status(403));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{dev_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"companyName\": \"Stark Industries\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/profiles/clients/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "clients",
+                                "me"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "4. Uploads",
+            "item": [
+                {
+                    "name": "4.1 Upload Image",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                                    "pm.test('Has url', () => pm.expect(pm.response.json().url).to.exist);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "file",
+                                    "type": "file",
+                                    "src": []
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/uploads/image",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "uploads",
+                                "image"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "4.2 Upload — No File (expect 400)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/uploads/image",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "uploads",
+                                "image"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "5. Cleanup",
+            "item": [
+                {
+                    "name": "5.1 Delete User (run last)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/profiles/users/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "users",
+                                "me"
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:3000/api/v1",
+            "type": "string"
+        },
+        {
+            "key": "jwt_token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "dev_token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "client_token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "developer_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "client_id",
+            "value": "",
+            "type": "string"
+        }
+    ]
+}
