@@ -9,6 +9,9 @@ require('dotenv').config();
 const authRoutes = require('./routes/authRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const technologyRoutes = require('./routes/technologyRoutes');
+const applicationRoutes = require('./routes/applicationRoutes');
+const contractRoutes = require('./routes/contractRoutes');
 
 const app = express();
 
@@ -36,6 +39,9 @@ app.use(limiter);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/profiles', profileRoutes);
 app.use('/api/v1/uploads', uploadRoutes);
+app.use('/api/v1/technologies', technologyRoutes);
+app.use('/api/v1/applications', applicationRoutes);
+app.use('/api/v1/contracts', contractRoutes);
 
 app.use((req, res) => {
     res.status(404).json({

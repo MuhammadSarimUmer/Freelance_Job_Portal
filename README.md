@@ -228,6 +228,8 @@ Acknowledges logout on the server side.
 
 ### `POST /auth/forgot-password`
 
+nodemailer will be implemented abhi implement nhi kia hay email system
+
 Initiates the password reset flow by generating a time-limited reset token (15 min expiry).
 
 **Why it exists:** Allows users who forgot their password to reset it. For security, the response always returns `200` regardless of whether the email exists — this prevents email enumeration attacks. In development mode (`NODE_ENV=development`), the response includes `devToken` for testing.
