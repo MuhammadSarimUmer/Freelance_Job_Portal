@@ -2,6 +2,20 @@
 
 **Base URL:** `http://localhost:3000/api/v1`
 
+**Environment Variables (.env):**
+
+```
+PORT=3000
+DATABASE_URL=...
+JWT_SECRET=...
+CLIENT_ID=...
+CLIENT_SECRET=...
+REFRESH_TOKEN=...
+EMAIL_USER=...
+```
+
+TODO-DEADLINE: Add email verification + OTP env vars (do not remove)
+
 All responses follow this shape:
 
 ```json
@@ -77,6 +91,8 @@ Creates a new user account with either a Developer or Client profile in a single
 | `409` | Email already in use |
 
 ---
+
+TODO-DEADLINE: Add email verification endpoints here (do not remove)
 
 ### `POST /auth/login`
 
@@ -260,6 +276,8 @@ Development mode response:
     "devToken": "eyJhbGci..."
 }
 ```
+
+TODO-DEADLINE: Document OTP reset endpoint here (do not remove)
 
 ---
 
@@ -573,6 +591,304 @@ Uploads a file to cloud storage (ImageKit) and returns the public URL. If the au
 
 ---
 
+## 6. Technologies & Skills
+
+### `GET /technologies`
+
+Returns all available technology stacks.
+
+**Response `200`:**
+
+```json
+{
+    "success": true,
+    "data": [
+        {
+            "techID": "uuid",
+            "techName": "React",
+            "category": "Frontend",
+            "version": "18"
+        }
+    ]
+}
+```
+
+---
+
+### `POST /technologies`
+
+Creates a new technology stack entry.
+
+**Request Body:**
+
+```json
+{
+    "techName": "React",
+    "category": "Frontend",
+    "version": "18"
+}
+```
+
+**Response `201`:**
+
+```json
+{
+    "success": true,
+    "message": "Technology created successfully",
+    "data": {
+        "techID": "uuid",
+        "techName": "React",
+        "category": "Frontend",
+        "version": "18"
+    }
+}
+```
+
+---
+
+### `POST /technologies/skills`
+
+Adds a skill to the currently logged-in developer.
+
+**Required Role:** `DEVELOPER`
+
+**Request Body:**
+
+```json
+{
+    "techID": "uuid",
+    "proficiencyLevel": "EXPERT",
+    "yearsExperience": 5
+}
+```
+
+**Response `201`:**
+
+```json
+{
+    "success": true,
+    "message": "Skill added successfully",
+    "data": {
+        "developerID": "uuid",
+        "techID": "uuid",
+        "proficiencyLevel": "EXPERT",
+        "yearsExperience": 5
+    }
+}
+```
+
+---
+
+### `PUT /technologies/skills/:techID`
+
+Updates a developer skill.
+
+**Required Role:** `DEVELOPER`
+
+**Request Body (any field optional):**
+
+```json
+{
+    "proficiencyLevel": "INTERMEDIATE",
+    "yearsExperience": 3
+}
+```
+
+**Response `200`:**
+
+```json
+{
+    "success": true,
+    "message": "Skill updated successfully",
+    "data": {
+        "developerID": "uuid",
+        "techID": "uuid",
+        "proficiencyLevel": "INTERMEDIATE",
+        "yearsExperience": 3
+    }
+}
+```
+
+---
+
+### `DELETE /technologies/skills/:techID`
+
+Deletes a developer skill.
+
+**Required Role:** `DEVELOPER`
+
+**Response `200`:**
+
+```json
+{
+    "success": true,
+    "message": "Skill deleted successfully"
+}
+```
+
+---
+
+## 7. Applications
+
+### `POST /applications`
+
+Creates a new application record.
+
+**Request Body:**
+
+```json
+{
+    "appName": "NextGen CRM",
+    "appType": "Web",
+    "description": "Internal CRM tool",
+    "currentVersion": "1.0.0"
+}
+```
+
+**Response `201`:**
+
+```json
+{
+    "success": true,
+    "message": "Application created successfully",
+    "data": { "appID": "uuid", "appName": "NextGen CRM" }
+}
+```
+
+---
+
+### `GET /applications`
+
+Returns all applications.
+
+---
+
+### `GET /applications/:id`
+
+Returns a single application with its contracts.
+
+---
+
+### `PUT /applications/:id`
+
+Updates an application.
+
+---
+
+### `DELETE /applications/:id`
+
+Deletes an application (fails if contracts exist).
+
+---
+
+## 8. Contracts
+
+### `POST /contracts`
+
+Creates a new contract (clients only).
+
+**Required Role:** `CLIENT`
+
+**Request Body:**
+
+```json
+{
+    "appID": "uuid",
+    "title": "Build CRM",
+    "description": "Scope for CRM build",
+    "startDate": "2026-04-11",
+    "endDate": "2026-06-01",
+    "totalAmount": 15000
+}
+```
+
+---
+
+### `GET /contracts`
+
+Returns contracts for the current user (clients see their contracts, developers see assigned contracts).
+
+**Required Role:** `CLIENT` or `DEVELOPER`
+
+---
+
+### `GET /contracts/:id`
+
+Returns a single contract by ID.
+
+**Required Role:** `CLIENT` or `DEVELOPER`
+
+---
+
+### `PUT /contracts/:id`
+
+Updates a contract (clients only, only when status is `DRAFT`).
+
+**Required Role:** `CLIENT`
+
+---
+
+### `PATCH /contracts/:id/status`
+
+Updates contract status (clients only).
+
+**Required Role:** `CLIENT`
+
+**Request Body:**
+
+```json
+{
+    "status": "IN_PROGRESS"
+}
+```
+
+---
+
+### `POST /contracts/:id/tech`
+
+Adds a required technology to a contract (clients only).
+
+**Required Role:** `CLIENT`
+
+**Request Body:**
+
+```json
+{
+    "techID": "uuid",
+    "requiredLevel": "EXPERT",
+    "purpose": "Frontend"
+}
+```
+
+---
+
+### `POST /contracts/:id/team`
+
+Assigns a developer to a contract (clients only).
+
+**Required Role:** `CLIENT`
+
+**Request Body:**
+
+```json
+{
+    "developerID": "uuid",
+    "role": "Frontend Lead",
+    "contributionPercentage": 50,
+    "paymentShare": 50
+}
+```
+
+---
+
+### `DELETE /contracts/:id`
+
+Deletes a contract (clients only).
+
+**Required Role:** `CLIENT`
+
+---
+
 ## Error Response Format
 
 All errors follow a consistent shape:
@@ -637,7 +953,11 @@ All errors follow a consistent shape:
 └─────────────┘                               └──────────┘
 ```
 
+TODO-DEADLINE: Update flow diagram for verification + OTP (do not remove)
+
 ---
+
+TODO-DEADLINE: Add verification + OTP Postman workflow here (do not remove)
 
 ## Rate Limiting
 
