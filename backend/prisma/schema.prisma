@@ -79,6 +79,26 @@ model User {
   client           Client?
 }
 
+// TODO-DEADLINE: Email verification + OTP schema additions (DO NOT REMOVE)
+// emailVerified    Boolean       @default(false)
+// emailVerifiedAt  DateTime?
+// emailVerificationToken        String?
+// emailVerificationTokenExpires DateTime?
+// passwordResetOtps PasswordResetOtp[]
+//
+// model PasswordResetOtp {
+//   otpID     String   @id @default(uuid())
+//   userID    String
+//   otpHash   String
+//   expiresAt DateTime
+//   usedAt    DateTime?
+//   attempts  Int      @default(0)
+//   createdAt DateTime @default(now())
+//   user      User     @relation(fields: [userID], references: [userID], onDelete: Cascade)
+//
+//   @@index([userID])
+// }
+
 model Developer {
   developerID        String                @id @default(uuid())
   userID             String                @unique

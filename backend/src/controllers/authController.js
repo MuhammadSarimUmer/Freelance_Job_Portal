@@ -204,3 +204,31 @@ module.exports = {
     logout,
     forgotPassword
 };
+
+/*
+TODO-DEADLINE: Email verification + OTP implementation (DO NOT REMOVE)
+
+const crypto = require('crypto');
+const { sendVerificationEmail, sendPasswordResetOtpEmail } = require('../services/emailService');
+
+const EMAIL_VERIFY_TTL_MINUTES = parseInt(process.env.EMAIL_VERIFY_TTL_MINUTES || '60', 10);
+const PASSWORD_RESET_OTP_TTL_MINUTES = parseInt(process.env.PASSWORD_RESET_OTP_TTL_MINUTES || '10', 10);
+const MAX_OTP_ATTEMPTS = 5;
+
+// register() with verification token + sendVerificationEmail
+// login() with emailVerified gate
+// forgotPassword() with OTP storage + sendPasswordResetOtpEmail
+// resetPassword(), resendVerification(), verifyEmail()
+
+module.exports = {
+    register,
+    login,
+    getMe,
+    refresh,
+    logout,
+    forgotPassword,
+    resetPassword,
+    resendVerification,
+    verifyEmail
+};
+*/
