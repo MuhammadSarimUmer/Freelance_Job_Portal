@@ -21,7 +21,11 @@ const updateDeveloperValidator = [
         .isIn(['AVAILABLE', 'BUSY', 'UNAVAILABLE']).withMessage('Invalid availability status'),
     body('experienceYears')
         .optional()
-        .isInt({ min: 0, max: 50 }).withMessage('Experience years must be between 0 and 50')
+        .isInt({ min: 0, max: 50 }).withMessage('Experience years must be between 0 and 50'),
+    body('removeProfileImage')
+        .optional()
+        .isBoolean().withMessage('removeProfileImage must be a boolean')
+        .toBoolean()
 ];
 
 const updateClientValidator = [
@@ -46,7 +50,11 @@ const updateClientValidator = [
         .optional()
         .trim()
         .notEmpty().withMessage('Country cannot be empty')
-        .escape()
+        .escape(),
+    body('removeProfileImage')
+        .optional()
+        .isBoolean().withMessage('removeProfileImage must be a boolean')
+        .toBoolean()
 ];
 
 module.exports = {

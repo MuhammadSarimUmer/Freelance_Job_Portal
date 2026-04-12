@@ -50,7 +50,7 @@ router.patch(
     verifyToken,
     requireRoles(['CLIENT']),
     checkContractOwner,
-contractController.updateContractStatus
+    contractController.updateContractStatus
 );
 
 router.post(

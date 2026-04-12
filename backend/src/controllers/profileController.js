@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const uploadService = require('../services/uploadService');
 
 const VALID_AVAILABILITY_STATUSES = ['AVAILABLE', 'BUSY', 'UNAVAILABLE'];
 
@@ -25,7 +26,7 @@ const getDevelopers = async (req, res) => {
         const developers = await prisma.developer.findMany({
             where: whereClause,
             include: {
-                user: { select: { fullName: true, email: true } },
+                user: { select: { fullName: true, email: true, profileImageUrl: true } },
                 knownTechs: { include: { tech: true } }
             }
         });
@@ -44,7 +45,7 @@ const getDeveloperById = async (req, res) => {
         const developer = await prisma.developer.findUnique({
             where: { developerID: id },
             include: {
-                user: { select: { fullName: true, email: true, registrationDate: true } },
+                user: { select: { fullName: true, email: true, registrationDate: true, profileImageUrl: true } },
                 knownTechs: { include: { tech: true } }
             }
         });
@@ -62,11 +63,21 @@ const getDeveloperById = async (req, res) => {
 
 const updateDeveloperMe = async (req, res) => {
     try {
-        const { fullName, phoneNumber, hourlyRate, portfolioURL, availabilityStatus, experienceYears } = req.body;
+        const { fullName, phoneNumber, hourlyRate, portfolioURL, availabilityStatus, experienceYears, removeProfileImage } = req.body;
 
         const userData = {};
         if (fullName !== undefined) userData.fullName = fullName;
         if (phoneNumber !== undefined) userData.phoneNumber = phoneNumber;
+        if (removeProfileImage && req.file) {
+            return res.status(400).json({ success: false, message: 'Cannot upload and remove profile image in the same request' });
+        }
+
+        if (removeProfileImage) {
+            userData.profileImageUrl = null;
+        } else if (req.file) {
+            const fileUrl = await uploadService.uploadToCloud(req.file);
+            userData.profileImageUrl = fileUrl;
+        }
 
         const developerData = {};
         if (hourlyRate !== undefined) developerData.hourlyRate = hourlyRate;
@@ -74,21 +85,41 @@ const updateDeveloperMe = async (req, res) => {
         if (availabilityStatus !== undefined) developerData.availabilityStatus = availabilityStatus;
         if (experienceYears !== undefined) developerData.experienceYears = experienceYears;
 
+        const hasUserUpdates = Object.keys(userData).length > 0;
+        const hasDeveloperUpdates = Object.keys(developerData).length > 0;
+
+        if (!hasUserUpdates && !hasDeveloperUpdates) {
+            return res.status(400).json({ success: false, message: 'Nothing to update' });
+        }
+
         const result = await prisma.$transaction(async (tx) => {
-            if (Object.keys(userData).length > 0) {
+            if (hasUserUpdates) {
                 await tx.user.update({
                     where: { userID: req.user.userId },
                     data: userData
                 });
             }
 
-            const developer = await tx.developer.update({
-                where: { userID: req.user.userId },
-                data: developerData,
-                include: {
-                    user: { select: { fullName: true, email: true, phoneNumber: true } }
-                }
-            });
+            const developer = hasDeveloperUpdates
+                ? await tx.developer.update({
+                    where: { userID: req.user.userId },
+                    data: developerData,
+                    include: {
+                        user: { select: { fullName: true, email: true, phoneNumber: true, profileImageUrl: true } }
+                    }
+                })
+                : await tx.developer.findUnique({
+                    where: { userID: req.user.userId },
+                    include: {
+                        user: { select: { fullName: true, email: true, phoneNumber: true, profileImageUrl: true } }
+                    }
+                });
+
+            if (!developer) {
+                const error = new Error('Developer profile not found');
+                error.code = 'P2025';
+                throw error;
+            }
 
             return developer;
         });
@@ -110,7 +141,7 @@ const getClientById = async (req, res) => {
         const client = await prisma.client.findUnique({
             where: { clientID: id },
             include: {
-                user: { select: { fullName: true, registrationDate: true } }
+                user: { select: { fullName: true, registrationDate: true, profileImageUrl: true } }
             }
         });
 
@@ -127,32 +158,62 @@ const getClientById = async (req, res) => {
 
 const updateClientMe = async (req, res) => {
     try {
-        const { fullName, phoneNumber, companyName, billingAddress, country } = req.body;
+        const { fullName, phoneNumber, companyName, billingAddress, country, removeProfileImage } = req.body;
 
         const userData = {};
         if (fullName !== undefined) userData.fullName = fullName;
         if (phoneNumber !== undefined) userData.phoneNumber = phoneNumber;
+        if (removeProfileImage && req.file) {
+            return res.status(400).json({ success: false, message: 'Cannot upload and remove profile image in the same request' });
+        }
+
+        if (removeProfileImage) {
+            userData.profileImageUrl = null;
+        } else if (req.file) {
+            const fileUrl = await uploadService.uploadToCloud(req.file);
+            userData.profileImageUrl = fileUrl;
+        }
 
         const clientData = {};
         if (companyName !== undefined) clientData.companyName = companyName;
         if (billingAddress !== undefined) clientData.billingAddress = billingAddress;
         if (country !== undefined) clientData.country = country;
 
+        const hasUserUpdates = Object.keys(userData).length > 0;
+        const hasClientUpdates = Object.keys(clientData).length > 0;
+
+        if (!hasUserUpdates && !hasClientUpdates) {
+            return res.status(400).json({ success: false, message: 'Nothing to update' });
+        }
+
         const result = await prisma.$transaction(async (tx) => {
-            if (Object.keys(userData).length > 0) {
+            if (hasUserUpdates) {
                 await tx.user.update({
                     where: { userID: req.user.userId },
                     data: userData
                 });
             }
 
-            const client = await tx.client.update({
-                where: { userID: req.user.userId },
-                data: clientData,
-                include: {
-                    user: { select: { fullName: true, email: true, phoneNumber: true } }
-                }
-            });
+            const client = hasClientUpdates
+                ? await tx.client.update({
+                    where: { userID: req.user.userId },
+                    data: clientData,
+                    include: {
+                        user: { select: { fullName: true, email: true, phoneNumber: true, profileImageUrl: true } }
+                    }
+                })
+                : await tx.client.findUnique({
+                    where: { userID: req.user.userId },
+                    include: {
+                        user: { select: { fullName: true, email: true, phoneNumber: true, profileImageUrl: true } }
+                    }
+                });
+
+            if (!client) {
+                const error = new Error('Client profile not found');
+                error.code = 'P2025';
+                throw error;
+            }
 
             return client;
         });

@@ -1,12 +1,15 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/prisma');
+const uploadService = require('../services/uploadService');
 
 const USER_SELECT = {
     userID: true,
     fullName: true,
     email: true,
     phoneNumber: true,
+    profileImageUrl: true,
     registrationDate: true,
     accountStatus: true
 };
@@ -14,6 +17,9 @@ const USER_SELECT = {
 const generateToken = (userId, role, expiresIn = '1d') => {
     return jwt.sign({ userId, role }, process.env.JWT_SECRET, { expiresIn });
 };
+
+const TOKEN_BLACKLIST_TTL_DAYS = parseInt(process.env.TOKEN_BLACKLIST_TTL_DAYS || '3', 10);
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
 const register = async (req, res) => {
     try {
@@ -27,9 +33,20 @@ const register = async (req, res) => {
         const salt = await bcrypt.genSalt(12);
         const passwordHash = await bcrypt.hash(password, salt);
 
+        let profileImageUrl = null;
+        if (req.file) {
+            profileImageUrl = await uploadService.uploadToCloud(req.file);
+        }
+
         const result = await prisma.$transaction(async (tx) => {
             const newUser = await tx.user.create({
-                data: { fullName, email, passwordHash, phoneNumber },
+                data: {
+                    fullName,
+                    email,
+                    passwordHash,
+                    phoneNumber,
+                    ...(profileImageUrl ? { profileImageUrl } : {})
+                },
                 select: USER_SELECT
             });
 
@@ -139,7 +156,26 @@ const refresh = async (req, res) => {
 };
 
 const logout = async (req, res) => {
-    res.status(200).json({ success: true, message: 'Logged out successfully' });
+    try {
+        const authHeader = req.headers.authorization || '';
+        const token = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+
+        if (token) {
+            const tokenHash = hashToken(token);
+            const expiresAt = new Date(Date.now() + TOKEN_BLACKLIST_TTL_DAYS * 24 * 60 * 60 * 1000);
+
+            await prisma.blacklistedToken.upsert({
+                where: { tokenHash },
+                create: { tokenHash, expiresAt },
+                update: { expiresAt }
+            });
+        }
+
+        res.status(200).json({ success: true, message: 'Logged out successfully' });
+    } catch (error) {
+        console.error('Logout error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
 };
 
 const forgotPassword = async (req, res) => {

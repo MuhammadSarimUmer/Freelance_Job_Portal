@@ -3,10 +3,11 @@ const router = express.Router();
 
 const validationMiddleware = require('../middlewares/validationMiddleware');
 const authMiddleware = require('../middlewares/authMiddleware');
+const uploadMiddleware = require('../middlewares/uploadMiddleware');
 const authController = require('../controllers/authController');
 const authValidator = require('../validators/authValidator');
 
-router.post('/register', authValidator.registerValidator, validationMiddleware.validateRequest, authController.register);
+router.post('/register', uploadMiddleware.uploadImageOnly, authValidator.registerValidator, validationMiddleware.validateRequest, authController.register);
 router.post('/login', authValidator.loginValidator, validationMiddleware.validateRequest, authController.login);
 router.get('/me', authMiddleware.verifyToken, authController.getMe);
 router.post('/refresh', authMiddleware.verifyToken, authController.refresh);

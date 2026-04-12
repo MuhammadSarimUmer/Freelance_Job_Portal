@@ -87,7 +87,7 @@ const getContracts = async (req, res) => {
                 application: true,
                 assignments: {
                     include: {
-                        developer: true  
+                        developer: true
                     }
                 },
                 technologies: true,
