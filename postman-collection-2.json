@@ -2,7 +2,7 @@
     "info": {
         "name": "Freelance Portal v3",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-        "description": "TODO-DEADLINE: Re-enable verification + OTP requests before release"
+        "description": "TODO-DEADLINE: Re-enable verification + OTP requests before release. PFP optional: use register formdata or PATCH /profiles/*/me with file."
     },
     "variable": [
         {
@@ -97,6 +97,57 @@
                     }
                 },
                 {
+                    "name": "1.1b Register Developer (With Profile Image)",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "fullName",
+                                    "value": "Tony Stark",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "email",
+                                    "value": "tony+pfp@stark.com",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "password",
+                                    "value": "securepass123",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "role",
+                                    "value": "DEVELOPER",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "phoneNumber",
+                                    "value": "+12025551234",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "file",
+                                    "type": "file"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/register",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "register"
+                            ]
+                        }
+                    }
+                },
+                {
                     "name": "1.2 Register Client",
                     "event": [
                         {
@@ -121,6 +172,62 @@
                                     "language": "json"
                                 }
                             }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/register",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "register"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "1.2b Register Client (With Profile Image)",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "fullName",
+                                    "value": "Bruce Wayne",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "email",
+                                    "value": "bruce+pfp@wayne.com",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "password",
+                                    "value": "securepass123",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "role",
+                                    "value": "CLIENT",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "country",
+                                    "value": "USA",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "phoneNumber",
+                                    "value": "+12025559876",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "file",
+                                    "type": "file"
+                                }
+                            ]
                         },
                         "url": {
                             "raw": "{{base_url}}/auth/register",
@@ -411,6 +518,70 @@
                     }
                 },
                 {
+                    "name": "2.4 Upload Developer Profile Image",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{dev_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "file",
+                                    "type": "file"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/profiles/developers/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "developers",
+                                "me"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "2.4b Remove Developer Profile Image",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{dev_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"removeProfileImage\": true\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/profiles/developers/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "developers",
+                                "me"
+                            ]
+                        }
+                    }
+                },
+                {
                     "name": "2.4 Get Client By ID",
                     "request": {
                         "method": "GET",
@@ -446,6 +617,70 @@
                         "body": {
                             "mode": "raw",
                             "raw": "{\n    \"companyName\": \"Wayne Industries\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/profiles/clients/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "clients",
+                                "me"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "2.6 Upload Client Profile Image",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{client_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "file",
+                                    "type": "file"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/profiles/clients/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "profiles",
+                                "clients",
+                                "me"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "2.6b Remove Client Profile Image",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{client_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"removeProfileImage\": true\n}",
                             "options": {
                                 "raw": {
                                     "language": "json"

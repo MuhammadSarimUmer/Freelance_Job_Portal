@@ -57,6 +57,8 @@ Creates a new user account with either a Developer or Client profile in a single
 }
 ```
 
+To upload a profile image during registration, send `multipart/form-data` with field `file` (JPEG/PNG/WebP) and include the other fields as text. The image is optional.
+
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
 | `fullName` | string | yes | |
@@ -283,6 +285,8 @@ TODO-DEADLINE: Document OTP reset endpoint here (do not remove)
 
 ## 2. Developer Profiles
 
+When uploading a profile image, use `multipart/form-data` with field `file`. For regular updates without images, send JSON with `Content-Type: application/json`.
+
 ### `GET /profiles/developers`
 
 Returns a list of all developers. Supports optional query filters.
@@ -394,6 +398,9 @@ Updates the currently logged-in developer's profile. Only send the fields you wa
 }
 ```
 
+To upload a profile image, send `multipart/form-data` with field `file` (JPEG/PNG/WebP) and include any other fields as text.
+To remove a profile image, send JSON with `removeProfileImage: true`.
+
 | Field | Type | Constraints |
 |-------|------|-------------|
 | `fullName` | string | Cannot be empty if provided |
@@ -417,7 +424,8 @@ Updates the currently logged-in developer's profile. Only send the fields you wa
         "user": {
             "fullName": "Tony Stark Updated",
             "email": "tony@stark.com",
-            "phoneNumber": "+14155551234"
+            "phoneNumber": "+14155551234",
+            "profileImageUrl": "https://ik.imagekit.io/your-id/files/backend/file_1712700000_avatar.png"
         }
     }
 }
@@ -435,6 +443,8 @@ Updates the currently logged-in developer's profile. Only send the fields you wa
 ---
 
 ## 3. Client Profiles
+
+When uploading a profile image, use `multipart/form-data` with field `file`. For regular updates without images, send JSON with `Content-Type: application/json`.
 
 ### `GET /profiles/clients/:id`
 
@@ -489,6 +499,9 @@ Updates the currently logged-in client's profile. Only send the fields you want 
 }
 ```
 
+To upload a profile image, send `multipart/form-data` with field `file` (JPEG/PNG/WebP) and include any other fields as text.
+To remove a profile image, send JSON with `removeProfileImage: true`.
+
 | Field | Type | Constraints |
 |-------|------|-------------|
 | `fullName` | string | Cannot be empty if provided |
@@ -510,7 +523,8 @@ Updates the currently logged-in client's profile. Only send the fields you want 
         "user": {
             "fullName": "Bruce Wayne Updated",
             "email": "bruce@wayne.com",
-            "phoneNumber": "+14155559876"
+            "phoneNumber": "+14155559876",
+            "profileImageUrl": "https://ik.imagekit.io/your-id/files/backend/file_1712700000_avatar.png"
         }
     }
 }
@@ -590,6 +604,7 @@ Uploads a file to cloud storage (ImageKit) and returns the public URL. If the au
 | `500` | Cloud upload failed |
 
 ---
+
 
 ## 6. Technologies & Skills
 
