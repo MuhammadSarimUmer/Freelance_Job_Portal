@@ -31,7 +31,7 @@ function ApplicationDetail() {
 
   return (
     <div style={{ backgroundColor: "var(--color-background)", minHeight: "100vh", display: "flex" }}>
-      <Sidebar activePage="Applications" role="developer" />
+      <Sidebar activePage="Create Contract" role="client" />
       <main
         className="sidebar-layout-main"
         style={{
@@ -42,7 +42,7 @@ function ApplicationDetail() {
       >
         {isLoading ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
-            <p style={{ color: "var(--color-outline)", fontFamily: "var(--font-body)" }}>Loading application data...</p>
+            <p style={{ color: "var(--color-outline)", fontFamily: "var(--font-body)" }}>Loading project app data...</p>
           </div>
         ) : application ? (
           <div className="anim-fade-in" style={{ maxWidth: "900px" }}>
@@ -66,7 +66,7 @@ function ApplicationDetail() {
               }}
             >
               <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>arrow_back</span>
-              Back to Applications
+              Back to Dashboard
             </button>
 
             {/* Header */}
@@ -82,7 +82,7 @@ function ApplicationDetail() {
                     lineHeight: 1,
                   }}
                 >
-                  {application.appName || "Application"} {application.appID ? `( ${application.appID.slice(-6).toUpperCase()} )` : ""}
+                  {application.appName || "Project App"} {application.appID ? `( ${application.appID.slice(-6).toUpperCase()} )` : ""}
                 </h1>
                 <span
                   style={{
@@ -220,8 +220,8 @@ function ApplicationDetail() {
                       if (!window.confirm("Delete this application?")) return;
                       try {
                         await applicationService.deleteApplication(application.appID);
-                        addToast("Application deleted.", "success");
-                        navigate("/developer/applications");
+                        addToast("Project app deleted.", "success");
+                        navigate("/client/dashboard");
                       } catch (err) {
                         addToast(err?.response?.data?.message || "Failed to delete.", "error");
                       }

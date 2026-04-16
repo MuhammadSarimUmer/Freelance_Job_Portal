@@ -196,7 +196,6 @@ function Sidebar({ activePage, role = "developer" }) {
               style={{
                 width: "40px",
                 height: "40px",
-                background: "var(--color-surface-container-highest)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -205,9 +204,17 @@ function Sidebar({ activePage, role = "developer" }) {
                 color: "var(--color-secondary)",
                 fontSize: "0.75rem",
                 borderRadius: "4px",
+                overflow: "hidden",
+                background: "var(--color-surface-container-highest)",
               }}
             >
-              {initials}
+              {user?.profileImageUrl ? (
+                <img
+                  src={user.profileImageUrl}
+                  alt={displayName}
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              ) : initials}
             </div>
             <div>
               <p

@@ -4,15 +4,17 @@ import { techTags } from "../data/mockData";
 import JobApplyModal from "../components/ui/JobApplyModal";
 import { contractService } from "../api/services/contractService";
 import { useToast } from "../context/ToastContext";
+import { normalizeTechName } from "../utils/techName";
 
 function JobListings() {
   const { addToast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTags, setActiveTags] = useState([]);
-  const [budget, setBudget] = useState(70);
+  const [budget, setBudget] = useState(0);
   const [selectedJob, setSelectedJob] = useState(null);
   const [contracts, setContracts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [experienceFilter, setExperienceFilter] = useState("Any");
   const [appTypes, setAppTypes] = useState({
     "Web Application": true,
     "Mobile Native": true,
@@ -48,6 +50,17 @@ function JobListings() {
     setAppTypes((prev) => ({ ...prev, [type]: !prev[type] }));
   };
 
+  const availableTechTags = useMemo(() => {
+    const tags = new Set();
+    contracts.forEach((job) => {
+      (job.technologies || []).forEach((tech) => {
+        if (tech.tech?.techName) tags.add(normalizeTechName(tech.tech.techName));
+      });
+    });
+
+    return tags.size > 0 ? Array.from(tags).sort() : techTags.map(normalizeTechName);
+  }, [contracts]);
+
   const appTypeMap = {
     WEB: "Web Application",
     MOBILE: "Mobile Native",
@@ -69,13 +82,28 @@ function JobListings() {
     const appTypeMatch = selectedAppTypes.length === 0 || selectedAppTypes.includes(jobAppType);
 
     const tagMatch = activeTags.length === 0 || activeTags.every((tag) =>
-      (job.technologies || []).some((tech) => tech.tech?.techName?.toLowerCase() === tag.toLowerCase()),
+      (job.technologies || []).some((tech) =>
+        normalizeTechName(tech.tech?.techName || "").toLowerCase() === tag.toLowerCase(),
+      ),
     );
 
     const budgetMatch = Number(job.totalAmount || 0) >= Math.round(Number(budget) * 250);
 
-    return queryMatch && appTypeMatch && tagMatch && budgetMatch;
-  }), [activeTags, appTypes, budget, contracts, searchQuery]);
+    const experienceMap = {
+      "Entry Level": ["BEGINNER"],
+      "Mid-Level": ["INTERMEDIATE"],
+      "Senior (5+ Years)": ["EXPERT"],
+      "Lead / Architect": ["EXPERT"],
+    };
+
+    const experienceMatch =
+      experienceFilter === "Any" ||
+      (job.technologies || []).some((tech) =>
+        (experienceMap[experienceFilter] || []).includes(tech.requiredLevel),
+      );
+
+    return queryMatch && appTypeMatch && tagMatch && budgetMatch && experienceMatch;
+  }), [activeTags, appTypes, budget, contracts, experienceFilter, searchQuery]);
 
   const allJobs = contracts;
 
@@ -181,42 +209,65 @@ function JobListings() {
                 <br />
                 <span style={{ color: "var(--color-secondary)" }}>RIGHT FIT.</span>
               </h1>
-              <div style={{ position: "relative", width: "100%", maxWidth: "380px" }}>
-                <span
-                  className="material-symbols-outlined"
+              <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", width: "100%", maxWidth: "520px" }}>
+                <div style={{ position: "relative", flex: 1 }}>
+                  <span
+                    className="material-symbols-outlined"
+                    style={{
+                      position: "absolute",
+                      left: "1rem",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      color: "var(--color-outline)",
+                      fontSize: "1.25rem",
+                    }}
+                  >
+                    search
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Search contracts, apps, keywords..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{
+                      width: "100%",
+                      background: "var(--color-surface-container)",
+                      border: "none",
+                      borderBottom: "2px solid var(--color-outline-variant-strong)",
+                      padding: "1rem 1rem 1rem 3rem",
+                      color: "var(--color-on-surface)",
+                      fontSize: "0.9rem",
+                      outline: "none",
+                      fontFamily: "var(--font-body)",
+                      transition: "border-color 0.3s ease",
+                    }}
+                    onFocus={(e) => (e.target.style.borderBottomColor = "var(--color-secondary)")}
+                    onBlur={(e) =>
+                      (e.target.style.borderBottomColor = "var(--color-outline-variant-strong)")
+                    }
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchContracts}
+                  disabled={isLoading}
                   style={{
-                    position: "absolute",
-                    left: "1rem",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    color: "var(--color-outline)",
-                    fontSize: "1.25rem",
+                    padding: "0.75rem 1.25rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--color-outline-variant)",
+                    background: "transparent",
+                    color: "var(--color-on-surface)",
+                    cursor: isLoading ? "not-allowed" : "pointer",
+                    fontFamily: "var(--font-headline)",
+                    fontWeight: 700,
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                    opacity: isLoading ? 0.6 : 1,
                   }}
                 >
-                  search
-                </span>
-                <input
-                  type="text"
-                  placeholder="Search contracts, apps, keywords..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{
-                    width: "100%",
-                    background: "var(--color-surface-container)",
-                    border: "none",
-                    borderBottom: "2px solid var(--color-outline-variant-strong)",
-                    padding: "1rem 1rem 1rem 3rem",
-                    color: "var(--color-on-surface)",
-                    fontSize: "0.9rem",
-                    outline: "none",
-                    fontFamily: "var(--font-body)",
-                    transition: "border-color 0.3s ease",
-                  }}
-                  onFocus={(e) => (e.target.style.borderBottomColor = "var(--color-secondary)")}
-                  onBlur={(e) =>
-                    (e.target.style.borderBottomColor = "var(--color-outline-variant-strong)")
-                  }
-                />
+                  {isLoading ? "Refreshing..." : "Refresh"}
+                </button>
               </div>
             </div>
           </section>
@@ -334,7 +385,7 @@ function JobListings() {
                   Tech Stack
                 </label>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                  {techTags.map((tag) => (
+                  {availableTechTags.map((tag) => (
                     <span
                       key={tag}
                       onClick={() => toggleTag(tag)}
@@ -387,7 +438,7 @@ function JobListings() {
                       fontFamily: "var(--font-body)",
                     }}
                   >
-                    ${Math.round(budget * 250)}+
+                    {budget === 0 ? "Any" : `$${Math.round(budget * 250)}+`}
                   </span>
                 </div>
                 <input
@@ -435,7 +486,10 @@ function JobListings() {
                     cursor: "pointer",
                     fontFamily: "var(--font-body)",
                   }}
+                  value={experienceFilter}
+                  onChange={(e) => setExperienceFilter(e.target.value)}
                 >
+                  <option>Any</option>
                   <option>Senior (5+ Years)</option>
                   <option>Lead / Architect</option>
                   <option>Mid-Level</option>

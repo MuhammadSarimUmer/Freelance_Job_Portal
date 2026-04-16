@@ -8,13 +8,27 @@ export const profileService = {
   getDeveloperById: (id) => api.get(`/profiles/developers/${id}`),
 
   // PATCH update logged-in developer's profile (PATCH, not PUT)
-  updateMyDeveloperProfile: (data) => api.patch("/profiles/developers/me", data),
+  updateMyDeveloperProfile: (data) =>
+    api.patch(
+      "/profiles/developers/me",
+      data,
+      data instanceof FormData
+        ? { headers: { "Content-Type": "multipart/form-data" } }
+        : undefined,
+    ),
 
   // GET client by ID
   getClientById: (id) => api.get(`/profiles/clients/${id}`),
 
   // PATCH update logged-in client's profile (PATCH, not PUT)
-  updateMyClientProfile: (data) => api.patch("/profiles/clients/me", data),
+  updateMyClientProfile: (data) =>
+    api.patch(
+      "/profiles/clients/me",
+      data,
+      data instanceof FormData
+        ? { headers: { "Content-Type": "multipart/form-data" } }
+        : undefined,
+    ),
 
   // DELETE logged-in user's account
   deleteMyAccount: () => api.delete("/profiles/users/me"),

@@ -10,7 +10,7 @@ lerna-debug.log*
 dist/
 dist-ssr/
 *.local
-coverage/
+scoverage/
 
 # Environment variables
 .env

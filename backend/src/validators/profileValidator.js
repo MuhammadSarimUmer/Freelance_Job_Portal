@@ -16,6 +16,9 @@ const updateDeveloperValidator = [
     body('portfolioURL')
         .optional()
         .isURL().withMessage('Invalid portfolio URL'),
+    body('cvUrl')
+        .optional()
+        .isURL().withMessage('Invalid CV URL'),
     body('availabilityStatus')
         .optional()
         .isIn(['AVAILABLE', 'BUSY', 'UNAVAILABLE']).withMessage('Invalid availability status'),

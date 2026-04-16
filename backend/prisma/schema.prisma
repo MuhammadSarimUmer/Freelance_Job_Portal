@@ -127,6 +127,7 @@ model Developer {
   experienceYears    Int                   @default(0)
   hourlyRate         Decimal               @db.Decimal(10, 2)
   portfolioURL       String?
+  cvUrl              String?
   availabilityStatus AvailabilityStatus    @default(AVAILABLE)
   user               User                  @relation(fields: [userID], references: [userID], onDelete: Cascade)
   knownTechs         DeveloperTechnology[]

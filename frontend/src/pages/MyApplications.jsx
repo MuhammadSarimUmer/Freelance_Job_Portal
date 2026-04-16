@@ -86,11 +86,34 @@ function MyApplications() {
         .status-WITHDRAWN { background: rgba(140, 140, 140, 0.15); color: var(--color-outline); }
       `}</style>
 
-      <Sidebar activePage="My Applications" role="developer" />
+      <Sidebar activePage="My Proposals" role="developer" />
 
       <main className="sidebar-layout-main" style={{ marginLeft: "256px", flex: 1, padding: "calc(96px + 3rem) 3rem 3rem 3rem" }}>
         
-        <h1 style={{ fontFamily: "var(--font-headline)", fontSize: "3rem", marginBottom: "3rem" }}>My Proposals & Invites</h1>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "3rem", gap: "1rem", flexWrap: "wrap" }}>
+          <h1 style={{ fontFamily: "var(--font-headline)", fontSize: "3rem", margin: 0 }}>My Proposals & Invites</h1>
+          <button
+            type="button"
+            onClick={fetchApplications}
+            disabled={isLoading}
+            style={{
+              padding: "0.75rem 1.5rem",
+              borderRadius: "4px",
+              border: "1px solid var(--color-outline-variant)",
+              background: "transparent",
+              color: "var(--color-on-surface)",
+              cursor: isLoading ? "not-allowed" : "pointer",
+              fontFamily: "var(--font-headline)",
+              fontWeight: 700,
+              fontSize: "0.8rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              opacity: isLoading ? 0.6 : 1,
+            }}
+          >
+            {isLoading ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
 
         {isLoading ? (
           <p style={{ color: "var(--color-on-surface-variant)" }}>Loading proposal activity...</p>

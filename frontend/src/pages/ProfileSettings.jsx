@@ -7,6 +7,7 @@ import { useToast } from "../context/ToastContext";
 import { profileService } from "../api/services/profileService";
 import { skillsService } from "../api/services/skillsService";
 import { uploadService } from "../api/services/uploadService";
+import { normalizeTechName } from "../utils/techName";
 
 function ProfileSettings() {
   const { user, loading: authLoading, refreshMe } = useAuth();
@@ -35,6 +36,9 @@ function ProfileSettings() {
   const [selectedTechID, setSelectedTechID] = useState("");
   const [addProficiencyLevel, setAddProficiencyLevel] = useState("BEGINNER");
   const [addYearsExperience, setAddYearsExperience] = useState("");
+  const [newTechName, setNewTechName] = useState("");
+  const [newTechCategory, setNewTechCategory] = useState("");
+  const [isCreatingTech, setIsCreatingTech] = useState(false);
 
   const [skillsProcessingTechID, setSkillsProcessingTechID] = useState(null);
   const [draftSkillEdits, setDraftSkillEdits] = useState({}); // { [techID]: { proficiencyLevel, yearsExperience } }
@@ -42,9 +46,61 @@ function ProfileSettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [removeProfileImage, setRemoveProfileImage] = useState(false);
   const [profileImageFile, setProfileImageFile] = useState(null);
+  const [cvFile, setCvFile] = useState(null);
+  const [isUploadingCv, setIsUploadingCv] = useState(false);
+  const [isTogglingAvailability, setIsTogglingAvailability] = useState(false);
 
   const [portfolioUploadFile, setPortfolioUploadFile] = useState(null);
   const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
+
+  const hasCv = Boolean(user?.developer?.cvUrl);
+
+  const hydrateFromUser = () => {
+    if (!user) return;
+
+    if (isDeveloper) {
+      setFormData({
+        fullName: user.fullName || "",
+        phoneNumber: user.phoneNumber || "",
+        hourlyRate: user.developer?.hourlyRate?.toString?.() ?? "",
+        portfolioURL: user.developer?.portfolioURL || "",
+        companyName: "",
+        billingAddress: "",
+        country: "",
+        availabilityStatus: user.developer?.availabilityStatus || "AVAILABLE",
+        experienceYears: user.developer?.experienceYears?.toString?.() ?? "",
+      });
+      const knownTechs = user.developer?.knownTechs || [];
+      setSkills(
+        knownTechs
+          .map((kt) => ({
+            techID: kt.techID,
+            techName: normalizeTechName(kt.tech?.techName || kt.tech?.name || kt.techID || "Unknown"),
+            proficiencyLevel: kt.proficiencyLevel,
+            yearsExperience: kt.yearsExperience ?? 0,
+          }))
+          .filter((x) => Boolean(x.techID))
+      );
+      setDraftSkillEdits({});
+      return;
+    }
+
+    if (isClient) {
+      setFormData({
+        fullName: user.fullName || "",
+        phoneNumber: user.phoneNumber || "",
+        hourlyRate: "",
+        portfolioURL: "",
+        companyName: user.client?.companyName || "",
+        billingAddress: user.client?.billingAddress || "",
+        country: user.client?.country || "",
+        availabilityStatus: "AVAILABLE",
+        experienceYears: "",
+      });
+      setSkills([]);
+      setDraftSkillEdits({});
+    }
+  };
 
   const handleInput = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -104,11 +160,41 @@ function ProfileSettings() {
       setAddYearsExperience("");
       setAddProficiencyLevel("BEGINNER");
       setDraftSkillEdits({});
-      await refreshMe();
+      void refreshMe();
     } catch (err) {
       addToast(err?.response?.data?.message || "Failed to add skill.", "error");
     } finally {
       setSkillsProcessingTechID(null);
+    }
+  };
+
+  const handleCreateTechnology = async (e) => {
+    e.preventDefault();
+    if (!newTechName.trim()) {
+      addToast("Enter a technology name.", "error");
+      return;
+    }
+    if (!newTechCategory.trim()) {
+      addToast("Enter a category for the technology.", "error");
+      return;
+    }
+
+    setIsCreatingTech(true);
+    try {
+      await skillsService.createTechnology({
+        techName: newTechName.trim(),
+        category: newTechCategory.trim(),
+      });
+      addToast("Technology added. Select it from the list.", "success");
+      setNewTechName("");
+      setNewTechCategory("");
+      const res = await skillsService.getAllTechnologies();
+      const techs = res.data?.data || res.data || [];
+      setAllTechnologies(Array.isArray(techs) ? techs : []);
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to add technology.", "error");
+    } finally {
+      setIsCreatingTech(false);
     }
   };
 
@@ -137,12 +223,17 @@ function ProfileSettings() {
       });
 
       addToast("Skill updated successfully.", "success");
+      setSkills((prev) => prev.map((item) =>
+        item.techID === techID
+          ? { ...item, proficiencyLevel, yearsExperience }
+          : item
+      ));
       setDraftSkillEdits((prev) => {
         const next = { ...prev };
         delete next[techID];
         return next;
       });
-      await refreshMe();
+      void refreshMe();
     } catch (err) {
       addToast(err?.response?.data?.message || "Failed to update skill.", "error");
     } finally {
@@ -155,12 +246,13 @@ function ProfileSettings() {
     try {
       await skillsService.removeSkill(techID);
       addToast("Skill removed successfully.", "success");
+      setSkills((prev) => prev.filter((item) => item.techID !== techID));
       setDraftSkillEdits((prev) => {
         const next = { ...prev };
         delete next[techID];
         return next;
       });
-      await refreshMe();
+      void refreshMe();
     } catch (err) {
       addToast(err?.response?.data?.message || "Failed to remove skill.", "error");
     } finally {
@@ -170,50 +262,21 @@ function ProfileSettings() {
 
   useEffect(() => {
     if (authLoading || !user) return;
-
-    if (isDeveloper) {
-      setFormData({
-        fullName: user.fullName || "",
-        phoneNumber: user.phoneNumber || "",
-        hourlyRate: user.developer?.hourlyRate?.toString?.() ?? "",
-        portfolioURL: user.developer?.portfolioURL || "",
-        companyName: "",
-        billingAddress: "",
-        country: "",
-        availabilityStatus: user.developer?.availabilityStatus || "AVAILABLE",
-        experienceYears: user.developer?.experienceYears?.toString?.() ?? "",
-      });
-      const knownTechs = user.developer?.knownTechs || [];
-      setSkills(
-        knownTechs
-          .map((kt) => ({
-            techID: kt.techID,
-            techName: kt.tech?.techName || kt.tech?.name || kt.techID || "Unknown",
-            proficiencyLevel: kt.proficiencyLevel,
-            yearsExperience: kt.yearsExperience ?? 0,
-          }))
-          .filter((x) => Boolean(x.techID))
-      );
-      setDraftSkillEdits({});
-      return;
-    }
-
-    if (isClient) {
-      setFormData({
-        fullName: user.fullName || "",
-        phoneNumber: user.phoneNumber || "",
-        hourlyRate: "",
-        portfolioURL: "",
-        companyName: user.client?.companyName || "",
-        billingAddress: user.client?.billingAddress || "",
-        country: user.client?.country || "",
-        availabilityStatus: "AVAILABLE",
-        experienceYears: "",
-      });
-      setSkills([]);
-      setDraftSkillEdits({});
-    }
+    hydrateFromUser();
   }, [authLoading, user, isDeveloper, isClient]);
+
+  const handleDiscardChanges = () => {
+    hydrateFromUser();
+    setSelectedTechID("");
+    setAddYearsExperience("");
+    setAddProficiencyLevel("BEGINNER");
+    setNewTechName("");
+    setNewTechCategory("");
+    setRemoveProfileImage(false);
+    setProfileImageFile(null);
+    setCvFile(null);
+    setPortfolioUploadFile(null);
+  };
 
   useEffect(() => {
     if (authLoading || !user || !isDeveloper) return;
@@ -294,6 +357,44 @@ function ProfileSettings() {
     }
   };
 
+  const handleCvUpload = async () => {
+    if (!isDeveloper || authLoading) return;
+    if (!cvFile) {
+      addToast("Select a CV file to upload.", "error");
+      return;
+    }
+
+    setIsUploadingCv(true);
+    try {
+      const res = await uploadService.uploadDocument(cvFile);
+      const url = res?.data?.url;
+      addToast(url ? "CV uploaded successfully." : "CV uploaded.", "success");
+      setCvFile(null);
+      await refreshMe();
+    } catch (err) {
+      addToast(err?.response?.data?.message || "CV upload failed.", "error");
+    } finally {
+      setIsUploadingCv(false);
+    }
+  };
+
+  const handleAvailabilityToggle = async () => {
+    if (!isDeveloper || authLoading) return;
+    const nextStatus = formData.availabilityStatus === "AVAILABLE" ? "BUSY" : "AVAILABLE";
+
+    setIsTogglingAvailability(true);
+    try {
+      await profileService.updateMyDeveloperProfile({ availabilityStatus: nextStatus });
+      setFormData((prev) => ({ ...prev, availabilityStatus: nextStatus }));
+      await refreshMe();
+      addToast("Availability updated.", "success");
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to update availability.", "error");
+    } finally {
+      setIsTogglingAvailability(false);
+    }
+  };
+
   const handlePortfolioUpload = async () => {
     if (!isDeveloper || authLoading) return;
     if (!portfolioUploadFile) {
@@ -317,13 +418,12 @@ function ProfileSettings() {
 
   const layoutStyles = `
     .settings-layout {
-      display: grid;
-      grid-template-columns: 256px 1fr;
       min-height: 100vh;
       background-color: var(--color-background);
     }
     .settings-main {
-      padding: 4rem;
+      margin-left: 256px;
+      padding: calc(96px + 3rem) 3rem 3rem;
       position: relative;
     }
     .settings-form-container {
@@ -358,14 +458,28 @@ function ProfileSettings() {
       margin-bottom: 0.5rem;
     }
     @media (max-width: 1024px) {
-      .settings-layout {
-        grid-template-columns: 1fr;
-      }
       .settings-main {
+        margin-left: 0;
         padding: 2rem;
       }
     }
   `;
+
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-secondary)", background: "var(--color-background)" }}>
+        Loading profile settings...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-secondary)", background: "var(--color-background)" }}>
+        Please sign in to manage your profile.
+      </div>
+    );
+  }
 
   return (
     <>
@@ -425,6 +539,28 @@ function ProfileSettings() {
                           <option value="BUSY" style={{ background: "initial" }}>Busy</option>
                           <option value="UNAVAILABLE" style={{ background: "initial" }}>Not Available</option>
                         </select>
+                        <button
+                          type="button"
+                          onClick={handleAvailabilityToggle}
+                          disabled={isTogglingAvailability}
+                          style={{
+                            marginTop: "0.75rem",
+                            background: "transparent",
+                            border: "1px solid var(--color-outline-variant)",
+                            color: "var(--color-on-surface)",
+                            padding: "0.6rem 1rem",
+                            borderRadius: "4px",
+                            cursor: isTogglingAvailability ? "not-allowed" : "pointer",
+                            fontFamily: "var(--font-headline)",
+                            fontWeight: 700,
+                            fontSize: "0.75rem",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.08em",
+                            opacity: isTogglingAvailability ? 0.6 : 1,
+                          }}
+                        >
+                          {isTogglingAvailability ? "Updating..." : "Toggle Availability"}
+                        </button>
                       </FormField>
                     </div>
                     
@@ -489,8 +625,115 @@ function ProfileSettings() {
                       </label>
                     </FormField>
 
+                    <FormField label="CV / Resume" hint="PDF, PNG, JPG, JPEG, DOCX (max 5MB).">
+                      <input
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.docx"
+                        className="input-field"
+                        style={{ padding: 0 }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          setCvFile(file);
+                        }}
+                        disabled={isUploadingCv}
+                      />
+                      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginTop: "0.75rem" }}>
+                        <button
+                          type="button"
+                          onClick={handleCvUpload}
+                          disabled={!cvFile || isUploadingCv}
+                          style={{
+                            background: "var(--color-secondary)",
+                            color: "var(--color-on-secondary)",
+                            border: "none",
+                            borderRadius: "4px",
+                            padding: "0.75rem 1.25rem",
+                            cursor: !cvFile || isUploadingCv ? "not-allowed" : "pointer",
+                            opacity: !cvFile || isUploadingCv ? 0.65 : 1,
+                            fontFamily: "var(--font-headline)",
+                            fontWeight: 700,
+                            fontSize: "0.8rem",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.1em",
+                          }}
+                        >
+                          {isUploadingCv ? "Uploading..." : "Upload CV"}
+                        </button>
+                        {hasCv ? (
+                          <button
+                            type="button"
+                            onClick={() => window.open(user?.developer?.cvUrl, "_blank", "noopener,noreferrer")}
+                            style={{
+                              background: "transparent",
+                              color: "var(--color-on-surface)",
+                              border: "1px solid var(--color-outline-variant)",
+                              borderRadius: "4px",
+                              padding: "0.75rem 1.25rem",
+                              cursor: "pointer",
+                              fontFamily: "var(--font-headline)",
+                              fontWeight: 700,
+                              fontSize: "0.8rem",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.1em",
+                            }}
+                          >
+                            View Current CV
+                          </button>
+                        ) : null}
+                      </div>
+                    </FormField>
+
                     <div>
                       <div className="form-label">Technology Skills</div>
+
+                      <form
+                        onSubmit={handleCreateTechnology}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1.25fr 1fr auto",
+                          gap: "1rem",
+                          alignItems: "end",
+                          marginBottom: "1.25rem",
+                        }}
+                      >
+                        <div>
+                          <input
+                            className="input-field"
+                            placeholder="Add a new technology (e.g. Rust)"
+                            value={newTechName}
+                            onChange={(e) => setNewTechName(e.target.value)}
+                            disabled={isCreatingTech}
+                          />
+                        </div>
+                        <div>
+                          <input
+                            className="input-field"
+                            placeholder="Category (e.g. Backend)"
+                            value={newTechCategory}
+                            onChange={(e) => setNewTechCategory(e.target.value)}
+                            disabled={isCreatingTech}
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={isCreatingTech}
+                          style={{
+                            background: "var(--color-surface-container-high)",
+                            color: "var(--color-primary)",
+                            border: "none",
+                            padding: "0 2rem",
+                            borderRadius: "4px",
+                            cursor: isCreatingTech ? "not-allowed" : "pointer",
+                            fontFamily: "var(--font-headline)",
+                            fontWeight: 700,
+                            opacity: isCreatingTech ? 0.65 : 1,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.08em",
+                          }}
+                        >
+                          {isCreatingTech ? "Adding..." : "Add Tech"}
+                        </button>
+                      </form>
 
                       <form
                         onSubmit={handleAddSkill}
@@ -515,10 +758,15 @@ function ProfileSettings() {
                             </option>
                             {allTechnologies.map((t) => (
                               <option key={t.techID} value={t.techID}>
-                                {t.techName} ({t.category})
+                                {normalizeTechName(t.techName)} ({t.category})
                               </option>
                             ))}
                           </select>
+                          {!techLoading && allTechnologies.length === 0 ? (
+                            <p style={{ marginTop: "0.5rem", color: "var(--color-secondary)", fontFamily: "var(--font-body)", fontSize: "0.85rem" }}>
+                              No technologies available yet. Ask an admin to add some.
+                            </p>
+                          ) : null}
                         </div>
 
                         <div>
@@ -582,7 +830,10 @@ function ProfileSettings() {
                           {skills.map((s) => {
                             const draft = draftSkillEdits[s.techID] || {};
                             const proficiencyValue = draft.proficiencyLevel || s.proficiencyLevel;
-                            const yearsValue = draft.yearsExperience === "" || draft.yearsExperience === null || draft.yearsExperience === undefined ? "" : draft.yearsExperience;
+                            const yearsValue =
+                              draft.yearsExperience === ""
+                                ? ""
+                                : draft.yearsExperience ?? s.yearsExperience ?? "";
                             const yearsInputValue = yearsValue === "" ? "" : String(yearsValue);
                             const isProcessing = skillsProcessingTechID === s.techID;
 
@@ -745,7 +996,7 @@ function ProfileSettings() {
                   </>
                 ) : null}
 
-                <div style={{ marginTop: "2rem" }}>
+                <div style={{ marginTop: "2rem", display: "flex", gap: "1rem", flexWrap: "wrap" }}>
                   <button
                     type="button"
                     onClick={handleSave}
@@ -766,6 +1017,26 @@ function ProfileSettings() {
                     disabled={authLoading || isSaving}
                   >
                     {isSaving ? "Saving..." : "Save Changes"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDiscardChanges}
+                    style={{
+                      padding: "1.25rem 2.5rem",
+                      borderRadius: "4px",
+                      border: "1px solid var(--color-outline-variant)",
+                      background: "transparent",
+                      color: "var(--color-on-surface)",
+                      cursor: "pointer",
+                      fontFamily: "var(--font-headline)",
+                      fontWeight: 700,
+                      fontSize: "0.8rem",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.18em",
+                    }}
+                    disabled={authLoading || isSaving}
+                  >
+                    Discard Changes
                   </button>
                 </div>
 

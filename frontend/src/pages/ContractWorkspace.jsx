@@ -10,6 +10,7 @@ function ContractWorkspace() {
   const { user } = useAuth();
   const [contract, setContract] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [activeTab, setActiveTab] = useState("milestones");
   const [escrowModalOpen, setEscrowModalOpen] = useState(false);
 
@@ -20,24 +21,13 @@ function ContractWorkspace() {
   const fetchContractDetails = async () => {
     try {
       setIsLoading(true);
+      setLoadError("");
       const res = await contractService.getContractById(id);
       if (res.data) setContract(res.data.data);
     } catch (err) {
       console.error(err);
-      // fallback mock
-      setContract({
-        contractID: id,
-        title: "E-Commerce Replatforming",
-        description: "Migrating from legacy PHP to modern React/Node stack.",
-        totalAmount: 15000,
-        status: "IN_PROGRESS",
-        endDate: null,
-        milestones: [],
-        technologies: [],
-        assignments: [
-          { developer: { developerID: "dev1", userID: "user1", user: { fullName: "Alex Rivera" } } },
-        ],
-      });
+      setLoadError(err?.response?.data?.message || "Failed to load contract workspace.");
+      setContract(null);
     } finally {
       setIsLoading(false);
     }
@@ -91,8 +81,12 @@ function ContractWorkspace() {
 
       <main className="sidebar-layout-main" style={{ marginLeft: "256px", flex: 1, padding: "calc(96px + 3rem) 3rem 3rem 3rem" }}>
         
-        {isLoading || !contract ? (
+        {isLoading ? (
            <p style={{ color: "var(--color-on-surface-variant)" }}>Loading workspace matrix...</p>
+        ) : loadError ? (
+           <p style={{ color: "var(--color-error)" }}>{loadError}</p>
+        ) : !contract ? (
+           <p style={{ color: "var(--color-on-surface-variant)" }}>Contract unavailable.</p>
         ) : (
           <div className="anim-fade-in">
             {/* Header */}
@@ -127,7 +121,7 @@ function ContractWorkspace() {
                 <div>
                   <h2 style={{ fontFamily: "var(--font-headline)", fontSize: "2rem", marginBottom: "1rem" }}>Project Milestones</h2>
                   {contract.milestones?.length > 0 ? (
-                    <ul>{contract.milestones.map((m, i) => <li key={i}>{m.title}</li>)}</ul>
+                    <ul>{contract.milestones.map((m) => <li key={m.milestoneID || m.title}>{m.title}</li>)}</ul>
                   ) : (
                     <p style={{ color: "var(--color-on-surface-variant)" }}>No milestones defined yet.</p>
                   )}
@@ -154,7 +148,11 @@ function ContractWorkspace() {
               {activeTab === "bugs" && (
                 <div>
                   <h2 style={{ fontFamily: "var(--font-headline)", fontSize: "2rem", marginBottom: "1rem" }}>Active Bug Reports</h2>
-                  <p style={{ color: "var(--color-on-surface-variant)" }}>System stable. No bugs tracked.</p>
+                  {contract.bugReports?.length > 0 ? (
+                    <ul>{contract.bugReports.map((bug) => <li key={bug.bugID || bug.title}>{bug.title}</li>)}</ul>
+                  ) : (
+                    <p style={{ color: "var(--color-on-surface-variant)" }}>No bug reports created yet.</p>
+                  )}
                 </div>
               )}
             </div>

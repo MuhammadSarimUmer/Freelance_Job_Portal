@@ -27,8 +27,26 @@ function JobApplyModal({ job, onClose, onSubmitted }) {
     (proposal) => proposal.developer?.userID === user?.userID || proposal.developer?.user?.email === user?.email,
   );
 
+  const requireCompleteProfile = () => {
+    const missing = [];
+
+    if (!user?.phoneNumber) missing.push("contact number");
+    if (!user?.developer?.cvUrl) missing.push("CV");
+    if (!user?.developer?.hourlyRate || Number(user.developer.hourlyRate) <= 0) missing.push("hourly rate");
+    if ((user?.developer?.knownTechs?.length || 0) === 0) missing.push("skills");
+
+    if (missing.length > 0) {
+      addToast(`Complete your profile before applying: ${missing.join(", ")}.`, "error");
+      navigate("/settings");
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmitProposal = async () => {
     try {
+      if (!requireCompleteProfile()) return;
       setIsSubmitting(true);
       await proposalService.createProposal(job.contractID, {
         message,
@@ -79,10 +97,12 @@ function JobApplyModal({ job, onClose, onSubmitted }) {
           borderRadius: "8px",
           width: "100%",
           maxWidth: "620px",
+          maxHeight: "90vh",
+          overflowY: "auto",
           border: "1px solid var(--color-outline-variant)",
           boxShadow: "var(--shadow-elevated)",
           position: "relative",
-          overflow: "hidden",
+          overflowX: "hidden",
         }}
       >
         {/* Glow */}
@@ -108,7 +128,7 @@ function JobApplyModal({ job, onClose, onSubmitted }) {
         </div>
 
         {/* Contract Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", marginBottom: "2rem", position: "relative", zIndex: 1 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "1rem", marginBottom: "2rem", position: "relative", zIndex: 1 }}>
           {[
             { label: "Total Budget", value: totalAmount, icon: "payments" },
             { label: "Deadline", value: deadline, icon: "calendar_today" },

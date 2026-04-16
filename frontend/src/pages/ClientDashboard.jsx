@@ -12,31 +12,35 @@ function ClientDashboard() {
   const { user } = useAuth();
   const [contracts, setContracts] = useState([]);
   const [selectedContract, setSelectedContract] = useState(null);
+  const [editingContract, setEditingContract] = useState(null);
+  const [editForm, setEditForm] = useState({ title: "", description: "", totalAmount: "", startDate: "", endDate: "" });
+  const [isUpdatingContract, setIsUpdatingContract] = useState(false);
   const [stats, setStats] = useState([
     { label: "Active Contracts", value: "0", icon: "assignment" },
     { label: "Total Spent", value: "$0.00", icon: "payments" },
     { label: "Milestones Pending", value: "0", icon: "flag" },
   ]);
 
+  const fetchContracts = async () => {
+    try {
+      const { data } = await contractService.getMyContracts();
+      const contracts = data?.data || [];
+      const active = contracts.filter(c => c.status === "IN_PROGRESS").length;
+      const totalSpent = contracts.reduce((acc, c) => acc + Number(c.totalAmount || 0), 0);
+
+      setStats([
+        { label: "Active Contracts", value: active.toString(), icon: "assignment" },
+        { label: "Total Spent", value: `$${totalSpent.toLocaleString()}`, icon: "payments" },
+        { label: "Contracts Created", value: contracts.length.toString(), icon: "flag" }
+      ]);
+
+      setContracts(contracts);
+    } catch (err) {
+      console.error("ClientDashboard fetch failed:", err);
+    }
+  };
+
   useEffect(() => {
-    const fetchContracts = async () => {
-      try {
-        const { data } = await contractService.getMyContracts();
-        const contracts = data?.data || [];
-        const active = contracts.filter(c => c.status === "IN_PROGRESS").length;
-        const totalSpent = contracts.reduce((acc, c) => acc + Number(c.totalAmount || 0), 0);
-
-        setStats([
-          { label: "Active Contracts", value: active.toString(), icon: "assignment" },
-          { label: "Total Spent", value: `$${totalSpent.toLocaleString()}`, icon: "payments" },
-          { label: "Contracts Created", value: contracts.length.toString(), icon: "flag" }
-        ]);
-
-        setContracts(contracts);
-      } catch (err) {
-        console.error("ClientDashboard fetch failed:", err);
-      }
-    };
     fetchContracts();
   }, []);
 
@@ -54,6 +58,54 @@ function ClientDashboard() {
           contract={selectedContract}
           onClose={() => setSelectedContract(null)}
         />
+      ) : null}
+      {editingContract ? (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
+          onClick={() => setEditingContract(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: "700px", background: "var(--color-surface-container-low)", border: "1px solid var(--color-outline-variant)", borderRadius: "8px", padding: "2rem" }}
+          >
+            <h3 style={{ marginTop: 0, fontFamily: "var(--font-headline)" }}>Edit Draft Contract</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+              <input value={editForm.title} onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))} placeholder="Title" style={{ padding: "0.75rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "4px" }} />
+              <input type="number" value={editForm.totalAmount} onChange={(e) => setEditForm((prev) => ({ ...prev, totalAmount: e.target.value }))} placeholder="Budget" style={{ padding: "0.75rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "4px" }} />
+              <input type="date" value={editForm.startDate} onChange={(e) => setEditForm((prev) => ({ ...prev, startDate: e.target.value }))} style={{ padding: "0.75rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "4px" }} />
+              <input type="date" value={editForm.endDate || ""} onChange={(e) => setEditForm((prev) => ({ ...prev, endDate: e.target.value }))} style={{ padding: "0.75rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "4px" }} />
+              <textarea value={editForm.description} onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Description" rows={4} style={{ gridColumn: "1 / -1", padding: "0.75rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "4px" }} />
+            </div>
+            <div style={{ display: "flex", gap: "1rem", marginTop: "1rem" }}>
+              <button
+                className="signature-cta"
+                onClick={async () => {
+                  try {
+                    setIsUpdatingContract(true);
+                    await contractService.updateContract(editingContract.contractID, {
+                      title: editForm.title,
+                      description: editForm.description,
+                      totalAmount: Number(editForm.totalAmount),
+                      startDate: editForm.startDate,
+                      endDate: editForm.endDate || null,
+                    });
+                    setEditingContract(null);
+                    await refreshContracts();
+                  } finally {
+                    setIsUpdatingContract(false);
+                  }
+                }}
+                disabled={isUpdatingContract}
+                style={{ padding: "0.75rem 1.5rem", border: "none", borderRadius: "4px", color: "var(--color-on-primary-container)", cursor: "pointer" }}
+              >
+                {isUpdatingContract ? "Saving..." : "Save Changes"}
+              </button>
+              <button onClick={() => setEditingContract(null)} style={{ padding: "0.75rem 1.5rem", border: "1px solid var(--color-outline-variant)", background: "transparent", color: "var(--color-on-surface)", borderRadius: "4px", cursor: "pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
       <main
         className="sidebar-layout-main"
@@ -119,31 +171,52 @@ function ClientDashboard() {
               Client Dashboard • {user?.country || "Global"}
             </p>
           </div>
-          <button
-            onClick={() => navigate("/post-contract")}
-            className="signature-cta"
-            style={{
-              padding: "1rem 2rem",
-              color: "var(--color-on-primary-container)",
-              fontFamily: "var(--font-headline)",
-              fontWeight: 700,
-              fontSize: "1rem",
-              border: "none",
-              cursor: "pointer",
-              borderRadius: "4px",
-              transition: "transform 0.3s ease, filter 0.3s ease"
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.filter = "brightness(1.1)";
-              e.target.style.transform = "translateY(-2px)";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.filter = "brightness(1)";
-              e.target.style.transform = "translateY(0)";
-            }}
-          >
-            Post New Contract
-          </button>
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+            <button
+              onClick={() => navigate("/post-contract")}
+              className="signature-cta"
+              style={{
+                padding: "1rem 2rem",
+                color: "var(--color-on-primary-container)",
+                fontFamily: "var(--font-headline)",
+                fontWeight: 700,
+                fontSize: "1rem",
+                border: "none",
+                cursor: "pointer",
+                borderRadius: "4px",
+                transition: "transform 0.3s ease, filter 0.3s ease"
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.filter = "brightness(1.1)";
+                e.target.style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.filter = "brightness(1)";
+                e.target.style.transform = "translateY(0)";
+              }}
+            >
+              Post New Contract
+            </button>
+            <button
+              type="button"
+              onClick={fetchContracts}
+              style={{
+                padding: "1rem 2rem",
+                borderRadius: "4px",
+                border: "1px solid var(--color-outline-variant)",
+                background: "transparent",
+                color: "var(--color-on-surface)",
+                cursor: "pointer",
+                fontFamily: "var(--font-headline)",
+                fontWeight: 700,
+                fontSize: "0.85rem",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              Refresh
+            </button>
+          </div>
         </header>
 
         {/* STATS */}
@@ -267,7 +340,7 @@ function ClientDashboard() {
                     borderBottom: "1px solid var(--color-outline-variant-strong)",
                   }}
                 >
-                  {["Contract Title", "Hiring", "Status", "Deadline"].map(
+                  {["Contract Title", "Hiring", "Status", "Deadline", "Actions"].map(
                     (col) => (
                       <th
                         key={col}
@@ -407,6 +480,40 @@ function ClientDashboard() {
                       >
                         {contract.endDate ? new Date(contract.endDate).toLocaleDateString() : "TBD"}
                       </span>
+                    </td>
+                    <td style={{ padding: "1.75rem 2rem", textAlign: "right" }}>
+                      {contract.status === "DRAFT" ? (
+                        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              setEditingContract(contract);
+                              setEditForm({
+                                title: contract.title || "",
+                                description: contract.description || "",
+                                totalAmount: String(contract.totalAmount || ""),
+                                startDate: contract.startDate ? String(contract.startDate).slice(0, 10) : "",
+                                endDate: contract.endDate ? String(contract.endDate).slice(0, 10) : "",
+                              });
+                            }}
+                            style={{ border: "1px solid var(--color-outline-variant)", background: "transparent", color: "var(--color-on-surface)", borderRadius: "4px", padding: "0.4rem 0.7rem", cursor: "pointer" }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await contractService.updateContractStatus(contract.contractID, "SIGNED");
+                              await fetchContracts();
+                            }}
+                            style={{ border: "none", background: "var(--color-primary-container)", color: "var(--color-on-primary-container)", borderRadius: "4px", padding: "0.4rem 0.7rem", cursor: "pointer" }}
+                          >
+                            Publish
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ color: "var(--color-outline)" }}>—</span>
+                      )}
                     </td>
                   </tr>
                 ))}

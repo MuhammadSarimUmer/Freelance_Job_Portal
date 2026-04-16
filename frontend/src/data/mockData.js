@@ -3,23 +3,20 @@
 // ============ SIDEBAR DATA ============
 export const developerNav = [
   { icon: "dashboard", label: "Dashboard", path: "/developer/dashboard" },
-  { icon: "work", label: "Browse Jobs", path: "/jobs" },
-  { icon: "assignment", label: "My Applications", path: "/developer/applications" },
+  { icon: "work", label: "Open Contracts", path: "/jobs" },
+  { icon: "assignment", label: "My Proposals", path: "/developer/applications" },
   { icon: "bug_report", label: "Bug Reports", path: "/bug-reports" },
   { icon: "celebration", label: "Milestones", path: "/milestones" },
   { icon: "payments", label: "Earnings", path: "/earnings" },
   { icon: "person", label: "Profile", path: "/developer/profile" },
-  { icon: "settings", label: "Settings", path: "/settings" },
 ];
 
 export const clientNav = [
   { icon: "dashboard", label: "Dashboard", path: "/client/dashboard" },
-  { icon: "add_circle", label: "Post Contract", path: "/post-contract" },
+  { icon: "add_circle", label: "Create Contract", path: "/post-contract" },
   { icon: "people", label: "Developer Directory", path: "/client/directory" },
   { icon: "bug_report", label: "Bug Reports", path: "/bug-reports" },
   { icon: "celebration", label: "Milestones", path: "/milestones" },
-  { icon: "payments", label: "Payments", path: "/earnings" },
-  { icon: "settings", label: "Settings", path: "/settings" },
 ];
 
 export const currentUser = {
@@ -34,7 +31,7 @@ export const bottomNavItems = [
 ];
 
 // ============ NAVBAR DATA ============
-export const navbarLinks = [{ label: "Browse Jobs", path: "/jobs" }];
+export const navbarLinks = [{ label: "Open Contracts", path: "/jobs" }];
 
 // ============ FOOTER DATA ============
 export const footerLinks = [

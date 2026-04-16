@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 
 function LoginSignup() {
   const navigate = useNavigate();
-  const { login, register } = useAuth();
+  const { login, register, user, loading } = useAuth();
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState("signup");
   const [selectedRole, setSelectedRole] = useState("developer");
@@ -20,6 +20,13 @@ function LoginSignup() {
   });
 
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+
+  useEffect(() => {
+    if (loading || !user?.role) return;
+
+    const target = user.role === "DEVELOPER" ? "/developer/dashboard" : "/client/dashboard";
+    navigate(target, { replace: true });
+  }, [loading, user, navigate]);
 
   const handleInput = (e) => {
     if (e.target.name === "profileImage") {

@@ -63,7 +63,7 @@ const getDeveloperById = async (req, res) => {
 
 const updateDeveloperMe = async (req, res) => {
     try {
-        const { fullName, phoneNumber, hourlyRate, portfolioURL, availabilityStatus, experienceYears, removeProfileImage } = req.body;
+        const { fullName, phoneNumber, hourlyRate, portfolioURL, availabilityStatus, experienceYears, removeProfileImage, cvUrl } = req.body;
 
         const userData = {};
         if (fullName !== undefined) userData.fullName = fullName;
@@ -80,10 +80,23 @@ const updateDeveloperMe = async (req, res) => {
         }
 
         const developerData = {};
-        if (hourlyRate !== undefined) developerData.hourlyRate = hourlyRate;
+        if (hourlyRate !== undefined) {
+            const parsedRate = Number(hourlyRate);
+            if (Number.isNaN(parsedRate)) {
+                return res.status(400).json({ success: false, message: 'Invalid hourly rate' });
+            }
+            developerData.hourlyRate = parsedRate;
+        }
         if (portfolioURL !== undefined) developerData.portfolioURL = portfolioURL;
+        if (cvUrl !== undefined) developerData.cvUrl = cvUrl;
         if (availabilityStatus !== undefined) developerData.availabilityStatus = availabilityStatus;
-        if (experienceYears !== undefined) developerData.experienceYears = experienceYears;
+        if (experienceYears !== undefined) {
+            const parsedYears = Number(experienceYears);
+            if (!Number.isInteger(parsedYears)) {
+                return res.status(400).json({ success: false, message: 'Invalid experience years' });
+            }
+            developerData.experienceYears = parsedYears;
+        }
 
         const hasUserUpdates = Object.keys(userData).length > 0;
         const hasDeveloperUpdates = Object.keys(developerData).length > 0;

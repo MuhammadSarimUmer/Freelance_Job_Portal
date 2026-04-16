@@ -6,5 +6,6 @@ const uploadMiddleware = require('../middlewares/uploadMiddleware');
 const uploadController = require('../controllers/uploadController');
 
 router.post('/image', authMiddleware.verifyToken, uploadMiddleware.uploadSingle, uploadController.uploadFile);
+router.post('/document', authMiddleware.verifyToken, uploadMiddleware.uploadSingle, uploadController.uploadCv);
 
 module.exports = router;

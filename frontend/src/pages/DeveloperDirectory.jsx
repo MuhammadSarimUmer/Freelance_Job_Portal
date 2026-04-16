@@ -20,6 +20,11 @@ function DeveloperDirectory() {
     fetchContracts();
   }, []);
 
+  const refreshData = async () => {
+    await fetchDevelopers();
+    await fetchContracts();
+  };
+
   const fetchDevelopers = async () => {
     try {
       setIsLoading(true);
@@ -225,13 +230,36 @@ function DeveloperDirectory() {
           <h1 style={{ fontFamily: "var(--font-headline)", fontSize: "3.5rem", letterSpacing: "-0.02em", color: "var(--color-on-surface)", margin: 0, lineHeight: 1 }}>
             Elite Engineers<br/>Available
           </h1>
-          <input 
-            type="text" 
-            placeholder="Search skills or names..." 
-            className="search-bar-neon"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <input 
+              type="text" 
+              placeholder="Search skills or names..." 
+              className="search-bar-neon"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={refreshData}
+              disabled={isLoading}
+              style={{
+                padding: "0.65rem 1.25rem",
+                borderRadius: "6px",
+                border: "1px solid var(--color-outline-variant)",
+                background: "transparent",
+                color: "var(--color-on-surface)",
+                cursor: isLoading ? "not-allowed" : "pointer",
+                fontFamily: "var(--font-headline)",
+                fontWeight: 700,
+                fontSize: "0.75rem",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                opacity: isLoading ? 0.6 : 1,
+              }}
+            >
+              {isLoading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
         </div>
 
         {/* GRID */}

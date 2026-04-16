@@ -1,8 +1,62 @@
 const prisma = require('../config/prisma');
 
+const normalizeTechName = (value) => {
+    if (!value) return '';
+
+    const raw = String(value).trim();
+    const lower = raw.toLowerCase();
+
+    const map = {
+        'nextjs': 'NextJS',
+        'next.js': 'NextJS',
+        'next js': 'NextJS',
+        'nodejs': 'Node.js',
+        'node.js': 'Node.js',
+        'reactjs': 'React',
+        'react.js': 'React',
+        'vuejs': 'Vue.js',
+        'nuxtjs': 'NuxtJS',
+        'nestjs': 'NestJS',
+        'sveltekit': 'SvelteKit',
+        'tailwindcss': 'Tailwind CSS',
+        'graphql': 'GraphQL',
+        'typescript': 'TypeScript',
+        'javascript': 'JavaScript',
+        'mongodb': 'MongoDB',
+        'postgresql': 'PostgreSQL',
+        'flutter': 'Flutter'
+    };
+
+    if (map[lower]) return map[lower];
+
+    return raw
+        .split(/\s+/)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+};
+
+const DEFAULT_TECHS = [
+    { techName: 'React', category: 'Frontend' },
+    { techName: 'NextJS', category: 'Frontend' },
+    { techName: 'Flutter', category: 'Mobile' },
+    { techName: 'Node.js', category: 'Backend' },
+    { techName: 'TypeScript', category: 'Language' },
+    { techName: 'JavaScript', category: 'Language' },
+    { techName: 'Python', category: 'Language' },
+    { techName: 'GraphQL', category: 'API' }
+];
+
 const getTechnologies = async (req, res) => {
     try {
-        const techs = await prisma.technologyStack.findMany();
+        let techs = await prisma.technologyStack.findMany();
+
+        if (techs.length === 0) {
+            await prisma.technologyStack.createMany({
+                data: DEFAULT_TECHS,
+                skipDuplicates: true
+            });
+            techs = await prisma.technologyStack.findMany();
+        }
 
         res.status(200).json({
             success: true,
@@ -21,10 +75,11 @@ const getTechnologies = async (req, res) => {
 const createTechnology = async (req, res) => {
     try {
         const { techName, category, version } = req.body;
+        const normalizedName = normalizeTechName(techName);
 
         const tech = await prisma.technologyStack.create({
             data: {
-                techName,
+                techName: normalizedName,
                 category,
                 version: version || null
             }
@@ -38,6 +93,13 @@ const createTechnology = async (req, res) => {
 
     } catch (error) {
         console.error('CreateTechnology error:', error);
+
+        if (error.code === 'P2002') {
+            return res.status(409).json({
+                success: false,
+                message: 'Technology already exists'
+            });
+        }
 
         res.status(500).json({
             success: false,

@@ -6,10 +6,11 @@ import DashboardHeader from "../components/ui/DashboardHeader";
 import { useAuth } from "../context/AuthContext";
 import { contractService } from "../api/services/contractService";
 import { useToast } from "../context/ToastContext";
+import { profileService } from "../api/services/profileService";
 
 function DeveloperDashboard() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshMe } = useAuth();
   const { addToast } = useToast();
   
   const [stats, setStats] = useState([
@@ -21,47 +22,51 @@ function DeveloperDashboard() {
   const [contracts, setContracts] = useState([]);
   const [networkActivity, setNetworkActivity] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isTogglingAvailability, setIsTogglingAvailability] = useState(false);
+
+  const availabilityLabel = user?.developer?.availabilityStatus === "AVAILABLE" ? "Available for Hire" : "Set Available for Hire";
+
+  const fetchDashboardData = async () => {
+    try {
+      setIsLoading(true);
+      const { data: contractData } = await contractService.getMyContracts();
+      const contracts = contractData?.data || [];
+      setContracts(contracts);
+
+      const activeProjects = contracts.filter(c => c.status === "IN_PROGRESS").length;
+      const completedContracts = contracts.filter(c => c.status === "COMPLETED");
+      const totalEarnings = completedContracts.reduce(
+        (acc, c) => acc + Number(c.totalAmount || 0), 0
+      );
+      const successRate = contracts.length > 0
+        ? `${Math.round((completedContracts.length / contracts.length) * 100)}%`
+        : "N/A";
+
+      setStats([
+        { label: "Active Projects", value: activeProjects.toString(), icon: "terminal" },
+        { label: "Total Earnings", value: `$${totalEarnings.toLocaleString()}`, icon: "payments" },
+        { label: "Hourly Rate", value: `$${user?.developer?.hourlyRate || 0}/hr`, icon: "timer" },
+        { label: "Success Rate", value: successRate, icon: "military_tech" }
+      ]);
+
+      // Build activity feed from assigned contracts
+      const acts = contracts.slice(0, 5).map(c => ({
+        title: c.status === "IN_PROGRESS" ? "Contract Active" : `Contract ${c.status}`,
+        desc: c.title,
+        time: new Date(c.startDate || Date.now()).toLocaleDateString(),
+        icon: c.status === "COMPLETED" ? "check_circle" : "work",
+        status: c.status === "COMPLETED" ? "success" : "neutral"
+      }));
+      setNetworkActivity(acts);
+    } catch (err) {
+      console.error("Dashboard fetch failed:", err);
+      addToast(err?.response?.data?.message || "Failed to load dashboard.", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setIsLoading(true);
-        const { data: contractData } = await contractService.getMyContracts();
-        const contracts = contractData?.data || [];
-        setContracts(contracts);
-
-        const activeProjects = contracts.filter(c => c.status === "IN_PROGRESS").length;
-        const completedContracts = contracts.filter(c => c.status === "COMPLETED");
-        const totalEarnings = completedContracts.reduce(
-          (acc, c) => acc + Number(c.totalAmount || 0), 0
-        );
-        const successRate = contracts.length > 0
-          ? `${Math.round((completedContracts.length / contracts.length) * 100)}%`
-          : "N/A";
-
-        setStats([
-          { label: "Active Projects", value: activeProjects.toString(), icon: "terminal" },
-          { label: "Total Earnings", value: `$${totalEarnings.toLocaleString()}`, icon: "payments" },
-          { label: "Hourly Rate", value: `$${user?.developer?.hourlyRate || 0}/hr`, icon: "timer" },
-          { label: "Success Rate", value: successRate, icon: "military_tech" }
-        ]);
-
-        // Build activity feed from assigned contracts
-        const acts = contracts.slice(0, 5).map(c => ({
-          title: c.status === "IN_PROGRESS" ? "Contract Active" : `Contract ${c.status}`,
-          desc: c.title,
-          time: new Date(c.startDate || Date.now()).toLocaleDateString(),
-          icon: c.status === "COMPLETED" ? "check_circle" : "work",
-          status: c.status === "COMPLETED" ? "success" : "neutral"
-        }));
-        setNetworkActivity(acts);
-      } catch (err) {
-        console.error("Dashboard fetch failed:", err);
-        addToast(err?.response?.data?.message || "Failed to load dashboard.", "error");
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchDashboardData();
   }, [user, addToast]);
 
@@ -149,21 +154,59 @@ function DeveloperDashboard() {
               Your engineering output tracked across high-frequency metrics.
             </p>
           </div>
-          <button
-            className="signature-cta"
-            style={{
-              padding: "1rem 2rem",
-              color: "var(--color-on-primary-container)",
-              fontFamily: "var(--font-headline)",
-              fontWeight: 700,
-              border: "none",
-              cursor: "pointer",
-              fontSize: "0.9rem",
-              borderRadius: "4px",
-            }}
-          >
-            Available for Hire
-          </button>
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+            <button
+              onClick={async () => {
+                try {
+                  setIsTogglingAvailability(true);
+                  await profileService.updateMyDeveloperProfile({
+                    availabilityStatus: user?.developer?.availabilityStatus === "AVAILABLE" ? "BUSY" : "AVAILABLE",
+                  });
+                  await refreshMe();
+                  addToast("Availability status updated.", "success");
+                } catch (err) {
+                  addToast(err?.response?.data?.message || "Failed to update availability.", "error");
+                } finally {
+                  setIsTogglingAvailability(false);
+                }
+              }}
+              className="signature-cta"
+              style={{
+                padding: "1rem 2rem",
+                color: "var(--color-on-primary-container)",
+                fontFamily: "var(--font-headline)",
+                fontWeight: 700,
+                border: "none",
+                cursor: "pointer",
+                fontSize: "0.9rem",
+                borderRadius: "4px",
+              }}
+              disabled={isTogglingAvailability}
+            >
+              {isTogglingAvailability ? "Updating..." : availabilityLabel}
+            </button>
+            <button
+              type="button"
+              onClick={fetchDashboardData}
+              disabled={isLoading}
+              style={{
+                padding: "1rem 2rem",
+                borderRadius: "4px",
+                border: "1px solid var(--color-outline-variant)",
+                background: "transparent",
+                color: "var(--color-on-surface)",
+                cursor: isLoading ? "not-allowed" : "pointer",
+                fontFamily: "var(--font-headline)",
+                fontWeight: 700,
+                fontSize: "0.85rem",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                opacity: isLoading ? 0.6 : 1,
+              }}
+            >
+              {isLoading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
         </header>
 
         {isLoading ? (

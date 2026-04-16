@@ -5,6 +5,7 @@ import Footer from "../components/layout/Footer";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { contractService } from "../api/services/contractService";
+import { normalizeTechName } from "../utils/techName";
 
 function DeveloperProfile() {
   const navigate = useNavigate();
@@ -44,7 +45,7 @@ function DeveloperProfile() {
     : "Available";
   const skills = useMemo(
     () => (developer?.knownTechs || []).map((skill) => ({
-      name: skill.tech?.techName || skill.techID || "Tech",
+      name: normalizeTechName(skill.tech?.techName || skill.techID || "Tech"),
     })),
     [developer?.knownTechs],
   );
@@ -150,7 +151,7 @@ function DeveloperProfile() {
                 onMouseEnter={(e) => (e.target.style.background = "var(--color-navbar-bg)")}
                 onMouseLeave={(e) => (e.target.style.background = "var(--color-surface-container-highest)")}
               >
-                Browse Jobs
+                Open Contracts
               </button>
             </div>
           </div>
@@ -205,16 +206,24 @@ function DeveloperProfile() {
                       overflow: "hidden",
                     }}
                   >
-                    <span
-                      style={{
-                        fontFamily: "var(--font-headline)",
-                        fontSize: "3.5rem",
-                        fontWeight: 700,
-                        color: "var(--color-on-surface)",
-                      }}
-                    >
-                      {initials}
-                    </span>
+                    {user?.profileImageUrl ? (
+                      <img
+                        src={user.profileImageUrl}
+                        alt={displayName}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <span
+                        style={{
+                          fontFamily: "var(--font-headline)",
+                          fontSize: "3.5rem",
+                          fontWeight: 700,
+                          color: "var(--color-on-surface)",
+                        }}
+                      >
+                        {initials}
+                      </span>
+                    )}
                   </div>
                   <div
                     style={{
@@ -302,6 +311,7 @@ function DeveloperProfile() {
                   }}
                 >
                   <button
+                    onClick={() => navigate("/settings")}
                     className="signature-cta"
                     style={{
                       width: "100%",
@@ -314,34 +324,17 @@ function DeveloperProfile() {
                       cursor: "pointer",
                       textTransform: "uppercase",
                       letterSpacing: "-0.02em",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "0.5rem",
-                      transition: "transform 0.3s ease, filter 0.3s ease",
                       borderRadius: "4px"
                     }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.filter = "brightness(1.1)";
-                      e.currentTarget.style.transform = "translateY(-2px)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.filter = "brightness(1)";
-                      e.currentTarget.style.transform = "translateY(0)";
-                    }}
                   >
-                    Hire Me
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: "1.25rem" }}
-                    >
-                      arrow_forward
-                    </span>
+                    Edit Profile
                   </button>
                   <button
                     onClick={() => {
                       if (developer?.portfolioURL) {
                         window.open(developer.portfolioURL, "_blank", "noopener,noreferrer");
+                      } else {
+                        navigate("/settings");
                       }
                     }}
                     style={{
@@ -358,7 +351,6 @@ function DeveloperProfile() {
                       transition: "background 0.2s",
                       borderRadius: "4px"
                     }}
-                    disabled={!developer?.portfolioURL}
                     onMouseEnter={(e) =>
                       (e.target.style.background = "var(--color-surface-container-high)")
                     }
@@ -470,94 +462,6 @@ function DeveloperProfile() {
                       </p>
                     </div>
                   ))}
-                </div>
-
-                {/* Featured Case Study */}
-                <div
-                  style={{
-                    background: "var(--color-tertiary-fixed)",
-                    padding: "2.5rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "1rem",
-                    borderRadius: "8px",
-                    transition: "transform 0.3s ease, box-shadow 0.3s ease"
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-4px)";
-                    e.currentTarget.style.boxShadow = "var(--shadow-card)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow = "none";
-                  }}
-                >
-                  <span
-                    style={{
-                      background: "var(--color-on-tertiary-fixed)",
-                      color: "var(--color-tertiary-fixed)",
-                      padding: "3px 10px",
-                      fontSize: "0.65rem",
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.1em",
-                      fontFamily: "var(--font-label)",
-                      alignSelf: "flex-start",
-                      borderRadius: "4px"
-                    }}
-                  >
-                    Featured Case Study
-                  </span>
-                  <h2
-                    style={{
-                      fontFamily: "var(--font-headline)",
-                      fontSize: "2rem",
-                      fontWeight: 700,
-                      color: "var(--color-on-tertiary-fixed)",
-                      lineHeight: 1.1,
-                      letterSpacing: "-0.03em",
-                    }}
-                  >
-                    Neural Architecture for FinTech.
-                  </h2>
-                  <p
-                    style={{
-                      color: "var(--color-on-tertiary-container)",
-                      fontSize: "0.9rem",
-                      lineHeight: 1.7,
-                      fontFamily: "var(--font-body)",
-                    }}
-                  >
-                    Re-engineering a legacy banking core into a distributed,
-                    reactive system processing $2B+ in monthly volume.
-                  </p>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "0.5rem",
-                      marginTop: "0.5rem",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    {["Rust", "Kafka", "gRPC", "PostgreSQL"].map((tag) => (
-                      <span
-                        key={tag}
-                        style={{
-                          background: "var(--color-glow-teal-soft)",
-                          color: "var(--color-secondary)",
-                          padding: "3px 10px",
-                          fontSize: "0.7rem",
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          fontFamily: "var(--font-label)",
-                          border: "1px solid var(--color-outline-variant-strong)",
-                          borderRadius: "4px"
-                        }}
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
                 </div>
 
                 {/* Experience Timeline */}

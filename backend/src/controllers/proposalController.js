@@ -124,10 +124,10 @@ const createProposal = async (req, res) => {
             }
         });
 
-        if (duplicate && duplicate.status !== 'WITHDRAWN' && duplicate.status !== 'DECLINED') {
+        if (duplicate) {
             return res.status(409).json({
                 success: false,
-                message: 'You already have an active proposal or invite for this contract'
+                message: 'You already have a proposal or invite for this contract'
             });
         }
 
@@ -143,19 +143,10 @@ const createProposal = async (req, res) => {
             decidedAt: null
         };
 
-        const proposal = duplicate
-            ? await prisma.contractProposal.update({
-                where: { proposalID: duplicate.proposalID },
-                data: {
-                    ...proposalData,
-                    createdAt: new Date()
-                },
-                include: contractInclude
-            })
-            : await prisma.contractProposal.create({
-                data: proposalData,
-                include: contractInclude
-            });
+        const proposal = await prisma.contractProposal.create({
+            data: proposalData,
+            include: contractInclude
+        });
 
         return res.status(201).json({
             success: true,
@@ -608,12 +599,11 @@ const withdrawProposal = async (req, res) => {
         }
 
         const updated = await prisma.contractProposal.update({
-            where: { proposalID },
+            where: { proposalID: proposalId },
             data: {
                 status: 'WITHDRAWN',
                 decidedAt: new Date()
-            },
-            include: contractInclude
+            }
         });
 
         return res.status(200).json({

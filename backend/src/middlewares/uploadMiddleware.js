@@ -2,14 +2,20 @@ const multer = require('multer');
 
 const storage = multer.memoryStorage();
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+const ALLOWED_TYPES = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+];
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 const fileFilter = (req, file, cb) => {
     if (ALLOWED_TYPES.includes(file.mimetype)) {
         cb(null, true);
     } else {
-        const error = new Error('Invalid file type. Allowed: JPEG, PNG, WebP, PDF');
+        const error = new Error('Invalid file type. Allowed: JPEG, PNG, WebP, PDF, DOCX');
         error.statusCode = 400;
         cb(error, false);
     }

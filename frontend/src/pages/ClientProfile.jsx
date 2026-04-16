@@ -4,10 +4,12 @@ import Sidebar from "../components/layout/Sidebar";
 import Footer from "../components/layout/Footer";
 import { profileService } from "../api/services/profileService";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../context/AuthContext";
 
 function ClientProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { addToast } = useToast();
   const [client, setClient] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -17,7 +19,7 @@ function ClientProfile() {
       try {
         setIsLoading(true);
         const res = await profileService.getClientById(id);
-        setClient(res.data);
+        setClient(res.data?.data || null);
       } catch (err) {
         addToast(err?.response?.data?.message || "Failed to load client profile.", "error");
         setClient({
@@ -89,7 +91,7 @@ function ClientProfile() {
     <>
       <style>{layoutStyles}</style>
       <div style={{ backgroundColor: "var(--color-background)", minHeight: "100vh", display: "flex" }}>
-        <Sidebar activePage="Clients" role="developer" />
+        <Sidebar activePage="Profile" role={user?.role?.toLowerCase() || "client"} />
 
         <main
           className="sidebar-layout-main"
@@ -123,16 +125,24 @@ function ClientProfile() {
                     border: "3px solid var(--color-primary)",
                   }}
                 >
-                  <span
-                    style={{
-                      fontFamily: "var(--font-headline)",
-                      fontSize: "2.5rem",
-                      fontWeight: 700,
-                      color: "var(--color-on-surface)",
-                    }}
-                  >
-                    {(client.user?.fullName || "?")[0].toUpperCase()}
-                  </span>
+                  {client.user?.profileImageUrl ? (
+                    <img
+                      src={client.user.profileImageUrl}
+                      alt={client.user?.fullName || "Client"}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+                    />
+                  ) : (
+                    <span
+                      style={{
+                        fontFamily: "var(--font-headline)",
+                        fontSize: "2.5rem",
+                        fontWeight: 700,
+                        color: "var(--color-on-surface)",
+                      }}
+                    >
+                      {(client.user?.fullName || "?")[0].toUpperCase()}
+                    </span>
+                  )}
                 </div>
 
                 <div style={{ flex: 1 }}>
@@ -177,7 +187,7 @@ function ClientProfile() {
 
                 <button
                   className="signature-cta"
-                  onClick={() => navigate(`/contracts?client=${id}`)}
+                  onClick={() => navigate(user?.role === "CLIENT" ? "/settings" : `/contracts?client=${id}`)}
                   style={{
                     padding: "1rem 2.5rem",
                     background: "linear-gradient(135deg, var(--color-primary), var(--color-primary-container))",
@@ -202,7 +212,7 @@ function ClientProfile() {
                     e.currentTarget.style.transform = "translateY(0)";
                   }}
                 >
-                  View Contracts
+                  {user?.role === "CLIENT" ? "Edit Profile" : "View Contracts"}
                 </button>
               </div>
 

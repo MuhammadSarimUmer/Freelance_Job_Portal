@@ -17,8 +17,17 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem("token");
-      window.location.href = "/auth";
+      const requestUrl = err.config?.url || "";
+      const isAuthRequest = ["/auth/login", "/auth/register", "/auth/forgot-password"].some((path) =>
+        requestUrl.includes(path),
+      );
+
+      if (!isAuthRequest) {
+        localStorage.removeItem("token");
+        if (window.location.pathname !== "/auth") {
+          window.location.href = "/auth";
+        }
+      }
     }
     return Promise.reject(err);
   },

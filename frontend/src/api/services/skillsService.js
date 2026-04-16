@@ -5,6 +5,9 @@ export const skillsService = {
   // GET all available technologies/skills
   getAllTechnologies: () => api.get("/technologies"),
 
+  // POST create a new technology entry
+  createTechnology: (data) => api.post("/technologies", data),
+
   // POST add a skill to logged-in developer's profile
   addSkill: (data) => api.post("/technologies/skills", data),
 

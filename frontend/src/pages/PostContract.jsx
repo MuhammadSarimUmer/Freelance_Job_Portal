@@ -1,22 +1,25 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Footer from "../components/layout/Footer";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../context/AuthContext";
 import { postContractSteps } from "../data/mockData";
 import { contractService, applicationService } from "../api/services/contractService";
+import { skillsService } from "../api/services/skillsService";
+import { normalizeTechName } from "../utils/techName";
 
 function PostContract() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { addToast } = useToast();
   const [step, setStep] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [milestones, setMilestones] = useState([
-    {
-      title: "Initial Architecture & Design Audit",
-      amount: "$4,500",
-      due: "Nov 12",
-    },
-  ]);
+  const [milestones, setMilestones] = useState([]);
+  const [techOptions, setTechOptions] = useState([]);
+  const [customTechName, setCustomTechName] = useState("");
+  const [customTechCategory, setCustomTechCategory] = useState("");
+  const [isCreatingTech, setIsCreatingTech] = useState(false);
+  const [milestoneDraft, setMilestoneDraft] = useState({ title: "", amount: "", due: "" });
   const [formData, setFormData] = useState({
     // App info (Step 1 — used to create Application record)
     appName: "",
@@ -28,22 +31,86 @@ function PostContract() {
     budget: "",
     startDate: "",
     endDate: "",
-    contractType: "Full-Stack Overhaul",
-    techTags: ["React", "Node.js"],
+    contractType: "Web Application",
+    techTags: [],
   });
 
   const handleInput = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
   const addMilestone = () => {
-    setMilestones([
-      ...milestones,
-      { title: "New Milestone", amount: "$0", due: "TBD" },
+    if (!milestoneDraft.title.trim() || !milestoneDraft.amount || !milestoneDraft.due) {
+      addToast("Provide milestone title, amount and due date first.", "error");
+      return;
+    }
+    setMilestones((prev) => [
+      ...prev,
+      {
+        title: milestoneDraft.title.trim(),
+        amount: `$${Number(milestoneDraft.amount).toLocaleString()}`,
+        due: new Date(milestoneDraft.due).toLocaleDateString(),
+      },
     ]);
+    setMilestoneDraft({ title: "", amount: "", due: "" });
+  };
+
+  useEffect(() => {
+    const fetchTech = async () => {
+      try {
+        const res = await skillsService.getAllTechnologies();
+        setTechOptions(res.data?.data || []);
+      } catch (err) {
+        addToast(err?.response?.data?.message || "Failed to load tech stack options.", "error");
+      }
+    };
+    fetchTech();
+  }, [addToast]);
+
+  const handleCreateTechnology = async () => {
+    if (!customTechName.trim()) {
+      addToast("Enter a technology name.", "error");
+      return;
+    }
+    if (!customTechCategory.trim()) {
+      addToast("Enter a category for the technology.", "error");
+      return;
+    }
+
+    setIsCreatingTech(true);
+    try {
+      await skillsService.createTechnology({
+        techName: customTechName.trim(),
+        category: customTechCategory.trim(),
+      });
+      addToast("Technology added.", "success");
+      setCustomTechName("");
+      setCustomTechCategory("");
+      const res = await skillsService.getAllTechnologies();
+      setTechOptions(res.data?.data || []);
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to add technology.", "error");
+    } finally {
+      setIsCreatingTech(false);
+    }
+  };
+
+  const toggleTechTag = (techName) => {
+    const normalized = normalizeTechName(techName);
+    setFormData((prev) => ({
+      ...prev,
+      techTags: prev.techTags.includes(normalized)
+        ? prev.techTags.filter((tag) => tag !== normalized)
+        : [...prev.techTags, normalized],
+    }));
   };
 
   const submitContract = async () => {
     try {
+      if (!user?.phoneNumber) {
+        addToast("Add a contact number before posting a contract.", "error");
+        navigate("/settings");
+        return;
+      }
       if (!formData.title || !formData.description || !formData.budget || !formData.startDate) {
         addToast("Fill in Title, Description, Budget, and Start Date before submitting.", "error");
         return;
@@ -65,7 +132,7 @@ function PostContract() {
       if (!appID) throw new Error("Failed to initialize application record.");
 
       // Step 2: Create the Contract linked to the Application
-      await contractService.createContract({
+      const contractRes = await contractService.createContract({
         appID,
         title: formData.title,
         description: formData.description,
@@ -73,6 +140,20 @@ function PostContract() {
         startDate: formData.startDate,
         endDate: formData.endDate || null,
       });
+      const contractID = contractRes.data?.data?.contractID;
+
+      if (contractID && formData.techTags.length > 0) {
+        const selectedTech = techOptions.filter((tech) =>
+          formData.techTags.includes(normalizeTechName(tech.techName)),
+        );
+        await Promise.all(selectedTech.map((tech) =>
+          contractService.addRequiredTech(contractID, {
+            techID: tech.techID,
+            requiredLevel: "INTERMEDIATE",
+            purpose: "Required for project delivery",
+          })
+        ));
+      }
 
       addToast("Contract compiled and dispatched successfully.", "success");
       navigate("/client/dashboard");
@@ -358,8 +439,8 @@ function PostContract() {
                           App Type
                         </label>
                         <select
-                          name="contractType"
-                          value={formData.contractType}
+                          name="appType"
+                          value={formData.appType}
                           onChange={handleInput}
                           style={{
                             width: "100%",
@@ -374,10 +455,10 @@ function PostContract() {
                             cursor: "pointer",
                           }}
                         >
-                          <option>Web Application</option>
-                          <option>Mobile App</option>
-                          <option>Desktop App</option>
-                          <option>Full-Stack Overhaul</option>
+                          <option value="WEB">Web Application</option>
+                          <option value="MOBILE">Mobile App</option>
+                          <option value="DESKTOP">Desktop App</option>
+                          <option value="INTERNAL">Internal Tools</option>
                         </select>
                       </div>
                     </div>
@@ -631,6 +712,42 @@ function PostContract() {
                         >
                           Tech Stack
                         </label>
+                        <div style={{ display: "grid", gridTemplateColumns: "1.25fr 1fr auto", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                          <input
+                            placeholder="Add a tech (e.g. Rust)"
+                            value={customTechName}
+                            onChange={(e) => setCustomTechName(e.target.value)}
+                            className="input-field"
+                            disabled={isCreatingTech}
+                          />
+                          <input
+                            placeholder="Category (e.g. Backend)"
+                            value={customTechCategory}
+                            onChange={(e) => setCustomTechCategory(e.target.value)}
+                            className="input-field"
+                            disabled={isCreatingTech}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleCreateTechnology}
+                            disabled={isCreatingTech}
+                            style={{
+                              background: "var(--color-surface-container-high)",
+                              color: "var(--color-primary)",
+                              border: "none",
+                              borderRadius: "4px",
+                              padding: "0 1.5rem",
+                              fontFamily: "var(--font-headline)",
+                              fontWeight: 700,
+                              cursor: isCreatingTech ? "not-allowed" : "pointer",
+                              opacity: isCreatingTech ? 0.65 : 1,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.08em",
+                            }}
+                          >
+                            {isCreatingTech ? "Adding..." : "Add"}
+                          </button>
+                        </div>
                         <div
                           style={{
                             display: "flex",
@@ -653,24 +770,32 @@ function PostContract() {
                                 borderRadius: "4px"
                               }}
                             >
-                              {tag}
+                              {normalizeTechName(tag)}
                             </span>
                           ))}
-                          <span
-                            style={{
-                              background: "var(--color-surface-container-highest)",
-                              color: "var(--color-secondary)",
-                              padding: "2px 10px",
-                              fontSize: "0.7rem",
-                              textTransform: "uppercase",
-                              fontFamily: "var(--font-label)",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              borderRadius: "4px"
-                            }}
-                          >
-                            + Add
-                          </span>
+                          {techOptions.slice(0, 12).map((tech) => (
+                            <span
+                              key={tech.techID}
+                              onClick={() => toggleTechTag(tech.techName)}
+                              style={{
+                                background: formData.techTags.includes(normalizeTechName(tech.techName))
+                                  ? "var(--color-secondary)"
+                                  : "var(--color-surface-container-highest)",
+                                color: formData.techTags.includes(normalizeTechName(tech.techName))
+                                  ? "var(--color-on-secondary-container)"
+                                  : "var(--color-secondary)",
+                                padding: "2px 10px",
+                                fontSize: "0.7rem",
+                                textTransform: "uppercase",
+                                fontFamily: "var(--font-label)",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                borderRadius: "4px"
+                              }}
+                            >
+                              {normalizeTechName(tech.techName)}
+                            </span>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -805,6 +930,28 @@ function PostContract() {
                         </div>
                       </div>
                     ))}
+                    <div style={{ background: "var(--color-surface-container)", padding: "1rem", borderRadius: "6px", display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "0.75rem" }}>
+                      <input
+                        value={milestoneDraft.title}
+                        onChange={(e) => setMilestoneDraft((prev) => ({ ...prev, title: e.target.value }))}
+                        placeholder="Milestone title"
+                        style={{ width: "100%", background: "transparent", border: "1px solid var(--color-outline-variant)", color: "var(--color-on-surface)", padding: "0.75rem", borderRadius: "4px" }}
+                      />
+                      <input
+                        type="number"
+                        min="1"
+                        value={milestoneDraft.amount}
+                        onChange={(e) => setMilestoneDraft((prev) => ({ ...prev, amount: e.target.value }))}
+                        placeholder="Amount"
+                        style={{ width: "100%", background: "transparent", border: "1px solid var(--color-outline-variant)", color: "var(--color-on-surface)", padding: "0.75rem", borderRadius: "4px" }}
+                      />
+                      <input
+                        type="date"
+                        value={milestoneDraft.due}
+                        onChange={(e) => setMilestoneDraft((prev) => ({ ...prev, due: e.target.value }))}
+                        style={{ width: "100%", background: "transparent", border: "1px solid var(--color-outline-variant)", color: "var(--color-on-surface)", padding: "0.75rem", borderRadius: "4px" }}
+                      />
+                    </div>
                     <div
                       style={{
                         display: "flex",
