@@ -1,0 +1,785 @@
+import { useEffect, useMemo, useState } from "react";
+import Sidebar from "../components/layout/Sidebar";
+import SectionHeader from "../components/ui/SectionHeader";
+import FormField from "../components/ui/FormField";
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
+import { profileService } from "../api/services/profileService";
+import { skillsService } from "../api/services/skillsService";
+import { uploadService } from "../api/services/uploadService";
+
+function ProfileSettings() {
+  const { user, loading: authLoading, refreshMe } = useAuth();
+  const roleLower = useMemo(() => user?.role?.toLowerCase() || null, [user?.role]);
+  const isDeveloper = roleLower === "developer";
+  const isClient = roleLower === "client";
+
+  const { addToast } = useToast();
+
+  const [formData, setFormData] = useState({
+    fullName: "",
+    phoneNumber: "",
+    hourlyRate: "",
+    portfolioURL: "",
+    companyName: "",
+    billingAddress: "",
+    country: "",
+    availabilityStatus: "AVAILABLE",
+    experienceYears: "",
+  });
+
+  const [skills, setSkills] = useState([]); // [{ techID, techName, proficiencyLevel, yearsExperience }]
+  const [allTechnologies, setAllTechnologies] = useState([]);
+  const [techLoading, setTechLoading] = useState(false);
+
+  const [selectedTechID, setSelectedTechID] = useState("");
+  const [addProficiencyLevel, setAddProficiencyLevel] = useState("BEGINNER");
+  const [addYearsExperience, setAddYearsExperience] = useState("");
+
+  const [skillsProcessingTechID, setSkillsProcessingTechID] = useState(null);
+  const [draftSkillEdits, setDraftSkillEdits] = useState({}); // { [techID]: { proficiencyLevel, yearsExperience } }
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [removeProfileImage, setRemoveProfileImage] = useState(false);
+  const [profileImageFile, setProfileImageFile] = useState(null);
+
+  const [portfolioUploadFile, setPortfolioUploadFile] = useState(null);
+  const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
+
+  const handleInput = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    if (!file) return;
+    if (removeProfileImage) {
+      addToast("Disable 'Remove profile image' before uploading a new file.", "error");
+      e.target.value = "";
+      setProfileImageFile(null);
+      return;
+    }
+    setProfileImageFile(file);
+  };
+
+  const handleToggleRemoveImage = (next) => {
+    const enabled = Boolean(next);
+    if (enabled && profileImageFile) {
+      addToast("Cannot upload and remove a profile image in the same request.", "error");
+      return;
+    }
+    setRemoveProfileImage(enabled);
+    if (!enabled) {
+      // Keep file selection as-is (user may uncheck to re-upload).
+      return;
+    }
+    // When enabling removal, ensure no file is pending.
+    setProfileImageFile(null);
+  };
+
+  const handleAddSkill = async (e) => {
+    e.preventDefault();
+    if (!selectedTechID) {
+      addToast("Select a technology to add.", "error");
+      return;
+    }
+    setSkillsProcessingTechID("add");
+    try {
+      const payload = {
+        techID: selectedTechID,
+        proficiencyLevel: addProficiencyLevel,
+      };
+      if (addYearsExperience.trim() !== "") {
+        const years = parseInt(addYearsExperience, 10);
+        if (Number.isNaN(years) || years < 0 || years > 50) {
+          addToast("Years of experience must be between 0 and 50.", "error");
+          return;
+        }
+        payload.yearsExperience = years;
+      }
+
+      await skillsService.addSkill(payload);
+      addToast("Skill added successfully.", "success");
+      setSelectedTechID("");
+      setAddYearsExperience("");
+      setAddProficiencyLevel("BEGINNER");
+      setDraftSkillEdits({});
+      await refreshMe();
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to add skill.", "error");
+    } finally {
+      setSkillsProcessingTechID(null);
+    }
+  };
+
+  const handleUpdateSkill = async (techID) => {
+    const skill = skills.find((s) => s.techID === techID);
+    if (!skill) return;
+    setSkillsProcessingTechID(techID);
+
+    try {
+      const draft = draftSkillEdits[techID] || {};
+      const proficiencyLevel = draft.proficiencyLevel || skill.proficiencyLevel;
+      const yearsRaw = draft.yearsExperience;
+      const yearsExperience =
+        yearsRaw === "" || yearsRaw === undefined || yearsRaw === null
+          ? skill.yearsExperience
+          : parseInt(String(yearsRaw), 10);
+
+      if (Number.isNaN(yearsExperience) || yearsExperience < 0 || yearsExperience > 50) {
+        addToast("Years of experience must be between 0 and 50.", "error");
+        return;
+      }
+
+      await skillsService.updateSkill(techID, {
+        proficiencyLevel,
+        yearsExperience,
+      });
+
+      addToast("Skill updated successfully.", "success");
+      setDraftSkillEdits((prev) => {
+        const next = { ...prev };
+        delete next[techID];
+        return next;
+      });
+      await refreshMe();
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to update skill.", "error");
+    } finally {
+      setSkillsProcessingTechID(null);
+    }
+  };
+
+  const handleRemoveSkill = async (techID) => {
+    setSkillsProcessingTechID(techID);
+    try {
+      await skillsService.removeSkill(techID);
+      addToast("Skill removed successfully.", "success");
+      setDraftSkillEdits((prev) => {
+        const next = { ...prev };
+        delete next[techID];
+        return next;
+      });
+      await refreshMe();
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to remove skill.", "error");
+    } finally {
+      setSkillsProcessingTechID(null);
+    }
+  };
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+
+    if (isDeveloper) {
+      setFormData({
+        fullName: user.fullName || "",
+        phoneNumber: user.phoneNumber || "",
+        hourlyRate: user.developer?.hourlyRate?.toString?.() ?? "",
+        portfolioURL: user.developer?.portfolioURL || "",
+        companyName: "",
+        billingAddress: "",
+        country: "",
+        availabilityStatus: user.developer?.availabilityStatus || "AVAILABLE",
+        experienceYears: user.developer?.experienceYears?.toString?.() ?? "",
+      });
+      const knownTechs = user.developer?.knownTechs || [];
+      setSkills(
+        knownTechs
+          .map((kt) => ({
+            techID: kt.techID,
+            techName: kt.tech?.techName || kt.tech?.name || kt.techID || "Unknown",
+            proficiencyLevel: kt.proficiencyLevel,
+            yearsExperience: kt.yearsExperience ?? 0,
+          }))
+          .filter((x) => Boolean(x.techID))
+      );
+      setDraftSkillEdits({});
+      return;
+    }
+
+    if (isClient) {
+      setFormData({
+        fullName: user.fullName || "",
+        phoneNumber: user.phoneNumber || "",
+        hourlyRate: "",
+        portfolioURL: "",
+        companyName: user.client?.companyName || "",
+        billingAddress: user.client?.billingAddress || "",
+        country: user.client?.country || "",
+        availabilityStatus: "AVAILABLE",
+        experienceYears: "",
+      });
+      setSkills([]);
+      setDraftSkillEdits({});
+    }
+  }, [authLoading, user, isDeveloper, isClient]);
+
+  useEffect(() => {
+    if (authLoading || !user || !isDeveloper) return;
+    const fetchTechnologies = async () => {
+      setTechLoading(true);
+      try {
+        const res = await skillsService.getAllTechnologies();
+        const techs = res.data?.data || res.data || [];
+        setAllTechnologies(Array.isArray(techs) ? techs : []);
+      } catch (err) {
+        addToast(err?.response?.data?.message || "Failed to load technologies.", "error");
+        setAllTechnologies([]);
+      } finally {
+        setTechLoading(false);
+      }
+    };
+    fetchTechnologies();
+  }, [authLoading, user, isDeveloper, addToast]);
+
+  const handleSave = async () => {
+    if (authLoading) return;
+    if (!user) {
+      addToast("Please sign in to update your profile.", "error");
+      return;
+    }
+    if (!isDeveloper && !isClient) {
+      addToast("Unable to determine your role for profile update.", "error");
+      return;
+    }
+
+    // Final conflict check (defense in depth).
+    if (removeProfileImage && profileImageFile) {
+      addToast("Cannot upload and remove a profile image in the same request.", "error");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const fd = new FormData();
+
+      if (isDeveloper) {
+        if (formData.fullName.trim() !== "") fd.append("fullName", formData.fullName.trim());
+        if (formData.phoneNumber.trim() !== "") fd.append("phoneNumber", formData.phoneNumber.trim());
+        if (formData.hourlyRate.trim() !== "") fd.append("hourlyRate", formData.hourlyRate.trim());
+        if (formData.portfolioURL.trim() !== "") fd.append("portfolioURL", formData.portfolioURL.trim());
+        if (formData.availabilityStatus) fd.append("availabilityStatus", formData.availabilityStatus);
+        if (formData.experienceYears.trim() !== "") fd.append("experienceYears", formData.experienceYears.trim());
+
+        if (removeProfileImage) fd.append("removeProfileImage", "true");
+        if (profileImageFile) fd.append("file", profileImageFile);
+
+        await profileService.updateMyDeveloperProfile(fd);
+      } else if (isClient) {
+        if (formData.fullName.trim() !== "") fd.append("fullName", formData.fullName.trim());
+        if (formData.phoneNumber.trim() !== "") fd.append("phoneNumber", formData.phoneNumber.trim());
+        if (formData.companyName.trim() !== "") fd.append("companyName", formData.companyName.trim());
+        if (formData.billingAddress.trim() !== "") fd.append("billingAddress", formData.billingAddress.trim());
+        if (formData.country.trim() !== "") fd.append("country", formData.country.trim());
+
+        if (removeProfileImage) fd.append("removeProfileImage", "true");
+        if (profileImageFile) fd.append("file", profileImageFile);
+
+        await profileService.updateMyClientProfile(fd);
+      }
+
+      addToast("Profile updated successfully.", "success");
+      await refreshMe();
+      // Clear file controls after successful update.
+      setRemoveProfileImage(false);
+      setProfileImageFile(null);
+    } catch (err) {
+      addToast(
+        err?.response?.data?.message || "Failed to update profile. Please try again.",
+        "error"
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePortfolioUpload = async () => {
+    if (!isDeveloper || authLoading) return;
+    if (!portfolioUploadFile) {
+      addToast("Select a portfolio file to upload.", "error");
+      return;
+    }
+
+    setIsUploadingPortfolio(true);
+    try {
+      const res = await uploadService.uploadImage(portfolioUploadFile);
+      const url = res?.data?.url;
+      addToast(url ? "Portfolio uploaded successfully." : "Portfolio uploaded.", "success");
+      setPortfolioUploadFile(null);
+      await refreshMe();
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Portfolio upload failed.", "error");
+    } finally {
+      setIsUploadingPortfolio(false);
+    }
+  };
+
+  const layoutStyles = `
+    .settings-layout {
+      display: grid;
+      grid-template-columns: 256px 1fr;
+      min-height: 100vh;
+      background-color: var(--color-background);
+    }
+    .settings-main {
+      padding: 4rem;
+      position: relative;
+    }
+    .settings-form-container {
+      background: var(--color-surface-container-low);
+      border-radius: 8px;
+      padding: 3rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .input-field {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid var(--color-outline-variant-strong);
+      padding: 1rem 0;
+      color: var(--color-on-surface);
+      font-size: 1rem;
+      outline: none;
+      font-family: var(--font-body);
+      transition: border-color 0.3s;
+    }
+    .input-field:focus {
+      border-bottom-color: var(--color-primary);
+    }
+    .form-label {
+      display: block;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: var(--color-secondary);
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    @media (max-width: 1024px) {
+      .settings-layout {
+        grid-template-columns: 1fr;
+      }
+      .settings-main {
+        padding: 2rem;
+      }
+    }
+  `;
+
+  return (
+    <>
+      <style>{layoutStyles}</style>
+      <div className="settings-layout">
+        <Sidebar activePage="Profile" role={roleLower || "developer"} />
+
+        <main className="settings-main anim-fade-in">
+          <div
+            className="teal-glow"
+            style={{
+              position: "fixed", top: "10%", right: "-10%", width: "500px", height: "500px", zIndex: 0, opacity: 0.5
+            }}
+          />
+          
+          <div style={{ position: "relative", zIndex: 1, maxWidth: "800px" }}>
+            <SectionHeader
+              title="Profile Settings"
+              subtitle="Manage your public identity and professional details."
+            />
+
+            <div className="settings-form-container">
+              <div style={{ display: "flex", flexDirection: "column", gap: "2.5rem" }}>
+                
+                {/* GLOBAL FIELDS */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+                  <FormField label="Full Name">
+                    <input className="input-field" name="fullName" value={formData.fullName} onChange={handleInput} />
+                  </FormField>
+                  <FormField label="Phone Number">
+                    <input className="input-field" name="phoneNumber" value={formData.phoneNumber} onChange={handleInput} />
+                  </FormField>
+                </div>
+
+                {/* DEVELOPER ONLY FIELDS */}
+                {isDeveloper && !authLoading ? (
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+                      <FormField label="Hourly Rate ($)">
+                        <input
+                          type="number"
+                          className="input-field"
+                          name="hourlyRate"
+                          value={formData.hourlyRate}
+                          onChange={handleInput}
+                        />
+                      </FormField>
+                      <FormField label="Availability Status">
+                        <select 
+                          className="input-field" 
+                          name="availabilityStatus" 
+                          value={formData.availabilityStatus} 
+                          onChange={handleInput}
+                          style={{ WebkitAppearance: "none" }}
+                        >
+                          <option value="AVAILABLE" style={{ background: "initial" }}>Available for Hire</option>
+                          <option value="BUSY" style={{ background: "initial" }}>Busy</option>
+                          <option value="UNAVAILABLE" style={{ background: "initial" }}>Not Available</option>
+                        </select>
+                      </FormField>
+                    </div>
+                    
+                    <FormField label="Portfolio URL">
+                      <input type="url" className="input-field" name="portfolioURL" value={formData.portfolioURL} onChange={handleInput} />
+                    </FormField>
+
+                    <FormField label="Portfolio Asset" hint="Upload an image/PDF to auto-populate your portfolio URL.">
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        className="input-field"
+                        style={{ padding: 0 }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          setPortfolioUploadFile(file);
+                        }}
+                        disabled={isUploadingPortfolio}
+                      />
+                      <button
+                        type="button"
+                        onClick={handlePortfolioUpload}
+                        disabled={!portfolioUploadFile || isUploadingPortfolio}
+                        style={{
+                          marginTop: "1rem",
+                          background: "var(--color-secondary)",
+                          color: "var(--color-on-secondary)",
+                          border: "none",
+                          borderRadius: "4px",
+                          padding: "0.85rem 1.25rem",
+                          cursor: !portfolioUploadFile || isUploadingPortfolio ? "not-allowed" : "pointer",
+                          opacity: !portfolioUploadFile || isUploadingPortfolio ? 0.65 : 1,
+                          fontFamily: "var(--font-headline)",
+                          fontWeight: 700,
+                          fontSize: "0.8rem",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.1em",
+                        }}
+                      >
+                        {isUploadingPortfolio ? "Uploading..." : "Upload Asset"}
+                      </button>
+                    </FormField>
+
+                    <FormField label="Profile Image" hint="JPEG, PNG, WebP (max 5MB).">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="input-field"
+                        style={{ padding: 0 }}
+                        onChange={handleFileChange}
+                        disabled={removeProfileImage}
+                      />
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "1rem", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={removeProfileImage}
+                          onChange={(e) => handleToggleRemoveImage(e.target.checked)}
+                        />
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: "0.9rem", color: "var(--color-on-surface-variant)" }}>
+                          Remove profile image
+                        </span>
+                      </label>
+                    </FormField>
+
+                    <div>
+                      <div className="form-label">Technology Skills</div>
+
+                      <form
+                        onSubmit={handleAddSkill}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1.25fr 0.9fr 0.8fr auto",
+                          gap: "1rem",
+                          alignItems: "end",
+                          marginBottom: "1.25rem",
+                        }}
+                      >
+                        <div>
+                          <select
+                            className="input-field"
+                            value={selectedTechID}
+                            onChange={(e) => setSelectedTechID(e.target.value)}
+                            disabled={techLoading}
+                            style={{ WebkitAppearance: "none" }}
+                          >
+                            <option value="" disabled>
+                              Select technology...
+                            </option>
+                            {allTechnologies.map((t) => (
+                              <option key={t.techID} value={t.techID}>
+                                {t.techName} ({t.category})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <select
+                            className="input-field"
+                            value={addProficiencyLevel}
+                            onChange={(e) => setAddProficiencyLevel(e.target.value)}
+                            disabled={techLoading}
+                            style={{ WebkitAppearance: "none" }}
+                          >
+                            <option value="BEGINNER" style={{ background: "initial" }}>Beginner</option>
+                            <option value="INTERMEDIATE" style={{ background: "initial" }}>Intermediate</option>
+                            <option value="EXPERT" style={{ background: "initial" }}>Expert</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <input
+                            type="number"
+                            min="0"
+                            max="50"
+                            className="input-field"
+                            placeholder="Years (0-50)"
+                            value={addYearsExperience}
+                            onChange={(e) => setAddYearsExperience(e.target.value)}
+                            disabled={techLoading}
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={techLoading || skillsProcessingTechID === "add" || !selectedTechID}
+                          style={{
+                            background: "var(--color-surface-container-high)",
+                            color: "var(--color-primary)",
+                            border: "none",
+                            padding: "0 2rem",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontFamily: "var(--font-headline)",
+                            fontWeight: 700,
+                            opacity: techLoading || skillsProcessingTechID === "add" || !selectedTechID ? 0.65 : 1,
+                          }}
+                        >
+                          {skillsProcessingTechID === "add" ? "Adding..." : "ADD"}
+                        </button>
+                      </form>
+
+                      {techLoading ? (
+                        <p style={{ margin: 0, color: "var(--color-secondary)" }}>Loading technologies...</p>
+                      ) : null}
+
+                      {!techLoading && skills.length === 0 ? (
+                        <p style={{ margin: 0, color: "var(--color-on-surface-variant)", fontFamily: "var(--font-body)" }}>
+                          No skills added yet.
+                        </p>
+                      ) : null}
+
+                      {skills.length > 0 ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "1.25rem" }}>
+                          {skills.map((s) => {
+                            const draft = draftSkillEdits[s.techID] || {};
+                            const proficiencyValue = draft.proficiencyLevel || s.proficiencyLevel;
+                            const yearsValue = draft.yearsExperience === "" || draft.yearsExperience === null || draft.yearsExperience === undefined ? "" : draft.yearsExperience;
+                            const yearsInputValue = yearsValue === "" ? "" : String(yearsValue);
+                            const isProcessing = skillsProcessingTechID === s.techID;
+
+                            return (
+                              <div
+                                key={s.techID}
+                                style={{
+                                  background: "var(--color-surface-container-low)",
+                                  border: "1px solid var(--color-outline-variant)",
+                                  borderRadius: "8px",
+                                  padding: "1.25rem",
+                                }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
+                                  <div style={{ minWidth: "220px" }}>
+                                    <div style={{ fontFamily: "var(--font-headline)", fontWeight: 700, color: "var(--color-on-surface)", fontSize: "1.05rem", marginBottom: "0.35rem" }}>
+                                      {s.techName}
+                                    </div>
+                                    <div style={{ color: "var(--color-outline)", fontFamily: "var(--font-body)", fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                                      {proficiencyValue}
+                                    </div>
+                                  </div>
+
+                                  <div style={{ display: "flex", gap: "1rem", alignItems: "flex-end", flexWrap: "wrap" }}>
+                                    <div>
+                                      <select
+                                        className="input-field"
+                                        value={proficiencyValue}
+                                        onChange={(e) =>
+                                          setDraftSkillEdits((prev) => ({
+                                            ...prev,
+                                            [s.techID]: {
+                                              ...(prev[s.techID] || {}),
+                                              proficiencyLevel: e.target.value,
+                                            },
+                                          }))
+                                        }
+                                        disabled={isProcessing}
+                                        style={{ WebkitAppearance: "none" }}
+                                      >
+                                        <option value="BEGINNER" style={{ background: "initial" }}>Beginner</option>
+                                        <option value="INTERMEDIATE" style={{ background: "initial" }}>Intermediate</option>
+                                        <option value="EXPERT" style={{ background: "initial" }}>Expert</option>
+                                      </select>
+                                    </div>
+
+                                    <div>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="50"
+                                        className="input-field"
+                                        value={yearsInputValue}
+                                        placeholder="Years (0-50)"
+                                        onChange={(e) => {
+                                          const raw = e.target.value;
+                                          setDraftSkillEdits((prev) => ({
+                                            ...prev,
+                                            [s.techID]: {
+                                              ...(prev[s.techID] || {}),
+                                              yearsExperience: raw === "" ? "" : parseInt(raw, 10),
+                                            },
+                                          }));
+                                        }}
+                                        disabled={isProcessing}
+                                      />
+                                    </div>
+
+                                    <div style={{ display: "flex", gap: "0.75rem" }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateSkill(s.techID)}
+                                        disabled={isProcessing}
+                                        style={{
+                                          background: "var(--color-secondary)",
+                                          color: "var(--color-on-secondary)",
+                                          border: "none",
+                                          borderRadius: "4px",
+                                          padding: "0.75rem 1.25rem",
+                                          cursor: isProcessing ? "not-allowed" : "pointer",
+                                          opacity: isProcessing ? 0.65 : 1,
+                                          fontFamily: "var(--font-headline)",
+                                          fontWeight: 700,
+                                          fontSize: "0.8rem",
+                                          textTransform: "uppercase",
+                                          letterSpacing: "0.1em",
+                                        }}
+                                      >
+                                        {isProcessing ? "Updating..." : "Update"}
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveSkill(s.techID)}
+                                        disabled={isProcessing}
+                                        style={{
+                                          background: "transparent",
+                                          color: "var(--color-error)",
+                                          border: "1px solid var(--color-error)",
+                                          borderRadius: "4px",
+                                          padding: "0.75rem 1.25rem",
+                                          cursor: isProcessing ? "not-allowed" : "pointer",
+                                          opacity: isProcessing ? 0.65 : 1,
+                                          fontFamily: "var(--font-headline)",
+                                          fontWeight: 700,
+                                          fontSize: "0.8rem",
+                                          textTransform: "uppercase",
+                                          letterSpacing: "0.1em",
+                                        }}
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  </>
+                ) : null}
+
+                {/* CLIENT ONLY FIELDS */}
+                {isClient && !authLoading ? (
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+                      <FormField label="Company Name">
+                        <input className="input-field" name="companyName" value={formData.companyName} onChange={handleInput} />
+                      </FormField>
+                      <FormField label="Country">
+                        <input className="input-field" name="country" value={formData.country} onChange={handleInput} />
+                      </FormField>
+                    </div>
+                    <FormField label="Billing Address">
+                      <input className="input-field" name="billingAddress" value={formData.billingAddress} onChange={handleInput} />
+                    </FormField>
+
+                    <FormField label="Profile Image" hint="JPEG, PNG, WebP (max 5MB).">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="input-field"
+                        style={{ padding: 0 }}
+                        onChange={handleFileChange}
+                        disabled={removeProfileImage}
+                      />
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "1rem", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={removeProfileImage}
+                          onChange={(e) => handleToggleRemoveImage(e.target.checked)}
+                        />
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: "0.9rem", color: "var(--color-on-surface-variant)" }}>
+                          Remove profile image
+                        </span>
+                      </label>
+                    </FormField>
+                  </>
+                ) : null}
+
+                <div style={{ marginTop: "2rem" }}>
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    className="signature-cta"
+                    style={{
+                    padding: "1.25rem 3rem",
+                    color: "var(--color-on-primary-container)",
+                    fontFamily: "var(--font-headline)",
+                    fontWeight: 700,
+                    fontSize: "0.85rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.2em",
+                    border: "none",
+                    cursor: "pointer",
+                    borderRadius: "4px",
+                    opacity: authLoading ? 0.65 : 1,
+                    }}
+                    disabled={authLoading || isSaving}
+                  >
+                    {isSaving ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+
+                {authLoading ? (
+                  <p style={{ color: "var(--color-secondary)", margin: 0 }}>Loading profile...</p>
+                ) : null}
+
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </>
+  );
+}
+
+export default ProfileSettings;

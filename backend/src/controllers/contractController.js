@@ -7,6 +7,80 @@ const VALID_PROFICIENCY_LEVEL = [
     'EXPERT'
 ];
 
+const ALLOWED_STATUS_TRANSITIONS = {
+    DRAFT: ['SIGNED', 'CANCELLED'],
+    SIGNED: ['IN_PROGRESS', 'CANCELLED'],
+    IN_PROGRESS: ['COMPLETED', 'CANCELLED'],
+    COMPLETED: [],
+    CANCELLED: []
+};
+
+const contractDetailInclude = {
+    client: {
+        include: {
+            user: {
+                select: {
+                    fullName: true,
+                    email: true,
+                    profileImageUrl: true
+                }
+            }
+        }
+    },
+    application: true,
+    assignments: {
+        include: {
+            developer: {
+                include: {
+                    user: {
+                        select: {
+                            fullName: true,
+                            email: true,
+                            profileImageUrl: true
+                        }
+                    }
+                }
+            }
+        }
+    },
+    proposals: {
+        include: {
+            developer: {
+                include: {
+                    user: {
+                        select: {
+                            fullName: true,
+                            email: true,
+                            profileImageUrl: true
+                        }
+                    }
+                }
+            }
+        },
+        orderBy: { createdAt: 'desc' }
+    },
+    technologies: {
+        include: {
+            tech: true
+        }
+    },
+    milestones: true,
+    bugReports: true
+};
+
+const resolveClientProfile = async (userId) => prisma.client.findUnique({
+    where: { userID: userId },
+    select: { clientID: true }
+});
+
+const resolveDeveloperProfile = async (userId) => prisma.developer.findUnique({
+    where: { userID: userId },
+    select: { developerID: true }
+});
+
+const canTransitionStatus = (currentStatus, nextStatus) =>
+    ALLOWED_STATUS_TRANSITIONS[currentStatus]?.includes(nextStatus);
+
 const createContract = async (req, res) => {
     try {
         const userId = req.user.userId;
@@ -25,6 +99,24 @@ const createContract = async (req, res) => {
         const client = await prisma.client.findUnique({
             where: { userID: userId }
         });
+
+        if (!client) {
+            return res.status(404).json({
+                success: false,
+                message: 'Client profile not found'
+            });
+        }
+
+        const app = await prisma.application.findUnique({
+            where: { appID }
+        });
+
+        if (!app) {
+            return res.status(404).json({
+                success: false,
+                message: 'Application not found'
+            });
+        }
 
         const contract = await prisma.projectContract.create({
             data: {
@@ -59,10 +151,7 @@ const getContracts = async (req, res) => {
         let whereClause = {};
 
         if (role === 'CLIENT') {
-            const client = await prisma.client.findUnique({
-                where: { userID: userId },
-                select: { clientID: true }
-            });
+            const client = await resolveClientProfile(userId);
 
             if (!client) {
                 return res.status(404).json({
@@ -75,24 +164,48 @@ const getContracts = async (req, res) => {
         }
 
         if (role === 'DEVELOPER') {
+            const developer = await resolveDeveloperProfile(userId);
+
+            if (!developer) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Developer profile not found'
+                });
+            }
+
             whereClause.assignments = {
-                some: { developerID: userId }
+                some: { developerID: developer.developerID }
             };
         }
 
         const contracts = await prisma.projectContract.findMany({
             where: whereClause,
-            include: {
-                client: true,
-                application: true,
-                assignments: {
-                    include: {
-                        developer: true
-                    }
-                },
-                technologies: true,
-                milestones: true,
-                bugReports: true
+            include: contractDetailInclude
+        });
+
+        return res.status(200).json({
+            success: true,
+            data: contracts
+        });
+
+    } catch (error) {
+        console.error('GetContracts error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Server error'
+        });
+    }
+};
+
+const getOpenContracts = async (req, res) => {
+    try {
+        const contracts = await prisma.projectContract.findMany({
+            where: {
+                status: 'DRAFT'
+            },
+            include: contractDetailInclude,
+            orderBy: {
+                startDate: 'asc'
             }
         });
 
@@ -113,19 +226,12 @@ const getContracts = async (req, res) => {
 const getContractById = async (req, res) => {
     try {
         const { id } = req.params;
+        const userId = req.user.userId;
+        const role = req.user.role;
 
         const contract = await prisma.projectContract.findUnique({
             where: { contractID: id },
-            include: {
-                client: true,
-                application: true,
-                assignments: {
-                    include: { developer: true }
-                },
-                technologies: true,
-                milestones: true,
-                bugReports: true
-            }
+            include: contractDetailInclude
         });
 
         if (!contract) {
@@ -133,6 +239,31 @@ const getContractById = async (req, res) => {
                 success: false,
                 message: 'Contract not found'
             });
+        }
+
+        if (role === 'CLIENT') {
+            const client = await resolveClientProfile(userId);
+            if (!client || contract.clientID !== client.clientID) {
+                return res.status(403).json({ success: false, message: 'Forbidden' });
+            }
+        }
+
+        if (role === 'DEVELOPER') {
+            const developer = await resolveDeveloperProfile(userId);
+            if (!developer) {
+                return res.status(404).json({ success: false, message: 'Developer profile not found' });
+            }
+
+            const assignedToContract = contract.assignments.some(
+                (assignment) => assignment.developerID === developer.developerID
+            );
+            const hasProposal = contract.proposals.some(
+                (proposal) => proposal.developerID === developer.developerID
+            );
+
+            if (!assignedToContract && !hasProposal && contract.status !== 'DRAFT') {
+                return res.status(403).json({ success: false, message: 'Forbidden' });
+            }
         }
 
         return res.status(200).json({ success: true, data: contract });
@@ -216,9 +347,21 @@ const updateContractStatus = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Contract not found' });
         }
 
+        if (!canTransitionStatus(contract.status, status)) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid status transition from ${contract.status} to ${status}`
+            });
+        }
+
+        const updateData = { status };
+        if (status === 'SIGNED' && !contract.signedDate) {
+            updateData.signedDate = new Date();
+        }
+
         const updated = await prisma.projectContract.update({
             where: { contractID: id },
-            data: { status }
+            data: updateData
         });
 
         return res.status(200).json({
@@ -372,8 +515,41 @@ const assignDeveloper = async (req, res) => {
             }
         });
 
+        await prisma.contractProposal.upsert({
+            where: {
+                contractID_developerID: {
+                    contractID: id,
+                    developerID
+                }
+            },
+            update: {
+                source: 'CLIENT_INVITE',
+                status: 'ACCEPTED',
+                role,
+                decidedAt: new Date(),
+                declineReason: null
+            },
+            create: {
+                contractID: id,
+                developerID,
+                source: 'CLIENT_INVITE',
+                status: 'ACCEPTED',
+                role,
+                decidedAt: new Date()
+            }
+        });
+
+        await prisma.projectContract.update({
+            where: { contractID: id },
+            data: {
+                status: contract.status === 'DRAFT' ? 'SIGNED' : contract.status,
+                signedDate: contract.signedDate || new Date()
+            }
+        });
+
         return res.status(201).json({
             success: true,
+            message: 'Developer assigned successfully',
             data: assignment
         });
 
@@ -428,6 +604,7 @@ const deleteContract = async (req, res) => {
 module.exports = {
     createContract,
     getContracts,
+    getOpenContracts,
     getContractById,
     updateContract,
     updateContractStatus,

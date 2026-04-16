@@ -39,6 +39,18 @@ enum ContractStatus {
   CANCELLED
 }
 
+enum ProposalStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+}
+
+enum ProposalSource {
+  DEVELOPER_PROPOSAL
+  CLIENT_INVITE
+}
+
 enum MilestoneStatus {
   PENDING
   IN_PROGRESS
@@ -119,6 +131,7 @@ model Developer {
   user               User                  @relation(fields: [userID], references: [userID], onDelete: Cascade)
   knownTechs         DeveloperTechnology[]
   assignedProjects   ContractAssignment[]
+  proposals          ContractProposal[]
 }
 
 model Client {
@@ -175,9 +188,28 @@ model ProjectContract {
   client       Client               @relation(fields: [clientID], references: [clientID], onDelete: Restrict)
   application  Application          @relation(fields: [appID], references: [appID], onDelete: Restrict)
   assignments  ContractAssignment[]
+  proposals    ContractProposal[]
   technologies ContractTechnology[]
   milestones   Milestone[]
   bugReports   BugReport[]
+}
+
+model ContractProposal {
+  proposalID     String          @id @default(uuid())
+  contractID     String
+  developerID    String
+  source         ProposalSource
+  status         ProposalStatus  @default(PENDING)
+  message        String?         @db.Text
+  proposedRate   Decimal?        @db.Decimal(10, 2)
+  role           String?
+  declineReason  String?         @db.Text
+  createdAt      DateTime        @default(now())
+  decidedAt      DateTime?
+  developer      Developer       @relation(fields: [developerID], references: [developerID], onDelete: Cascade)
+  contract       ProjectContract @relation(fields: [contractID], references: [contractID], onDelete: Cascade)
+
+  @@unique([contractID, developerID])
 }
 
 model ContractAssignment {

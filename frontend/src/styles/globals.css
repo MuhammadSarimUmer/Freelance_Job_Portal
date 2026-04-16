@@ -1,0 +1,299 @@
+/* ============================================
+   KINETIC EDITORIAL — GLOBAL DESIGN SYSTEM
+   ============================================ */
+
+/* ── Dark Theme (Default) ── */
+:root,
+[data-theme="dark"] {
+  --color-background: #051614;
+  --color-surface: #051614;
+  --color-surface-container-low: #0d1f1d;
+  --color-surface-container: #112321;
+  --color-surface-container-high: #1b2d2b;
+  --color-surface-container-highest: #263836;
+  --color-surface-bright: #2b3d3a;
+  --color-on-surface: #d2e7e3;
+  --color-on-surface-variant: #ddc1b4;
+  --color-secondary: #83d3df;
+  --color-secondary-container: #006b76;
+  --color-on-secondary-container: #99e9f6;
+  --color-primary: #ffb691;
+  --color-primary-container: #e37434;
+  --color-on-primary-container: #4e1d00;
+  --color-tertiary-fixed: #e8e5b5;
+  --color-on-tertiary-fixed: #1d1d01;
+  --color-on-tertiary-container: #42411e;
+  --color-on-tertiary-fixed-variant: #494825;
+  --color-outline: #a58b80;
+  --color-outline-variant: rgba(86, 66, 57, 0.15);
+  --color-outline-variant-strong: rgba(86, 66, 57, 0.4);
+  --color-surface-dim: #051614;
+  --color-surface-tint: #ffb691;
+
+  /* Glow colors */
+  --color-glow-teal: rgba(0, 107, 118, 0.3);
+  --color-glow-teal-soft: rgba(0, 107, 118, 0.15);
+
+  /* Navbar */
+  --color-navbar-bg: rgba(5, 22, 20, 0.7);
+
+  /* Selection */
+  --color-selection-bg: #e37434;
+  --color-selection-text: #4e1d00;
+
+  /* Shadows */
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.3);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+  /* Marquee opacity */
+  --marquee-opacity: 0.2;
+
+  /* Hero image opacity */
+  --hero-image-opacity: 0.5;
+
+  /* Fonts */
+  --font-headline: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-label: "Inter", sans-serif;
+}
+
+/* ── Light Theme ── */
+[data-theme="light"] {
+  --color-background: #f5f3f0;
+  --color-surface: #f5f3f0;
+  --color-surface-container-low: #ffffff;
+  --color-surface-container: #f0eeeb;
+  --color-surface-container-high: #e6e4e1;
+  --color-surface-container-highest: #dcdad7;
+  --color-surface-bright: #d0cecc;
+  --color-on-surface: #1a2b29;
+  --color-on-surface-variant: #6b4f42;
+  --color-secondary: #006b76;
+  --color-secondary-container: #006b76;
+  --color-on-secondary-container: #ffffff;
+  --color-primary: #c45a1e;
+  --color-primary-container: #d45a1e;
+  --color-on-primary-container: #ffffff;
+  --color-tertiary-fixed: #e8e5b5;
+  --color-on-tertiary-fixed: #1d1d01;
+  --color-on-tertiary-container: #42411e;
+  --color-on-tertiary-fixed-variant: #494825;
+  --color-outline: #8a7468;
+  --color-outline-variant: rgba(86, 66, 57, 0.1);
+  --color-outline-variant-strong: rgba(86, 66, 57, 0.25);
+  --color-surface-dim: #e8e6e3;
+  --color-surface-tint: #c45a1e;
+
+  /* Glow colors */
+  --color-glow-teal: rgba(0, 107, 118, 0.08);
+  --color-glow-teal-soft: rgba(0, 107, 118, 0.05);
+
+  /* Navbar */
+  --color-navbar-bg: rgba(245, 243, 240, 0.85);
+
+  /* Selection */
+  --color-selection-bg: #d45a1e;
+  --color-selection-text: #ffffff;
+
+  /* Shadows */
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.1);
+
+  /* Marquee opacity */
+  --marquee-opacity: 0.35;
+
+  /* Hero image opacity */
+  --hero-image-opacity: 0.35;
+}
+
+/* ── Reset ── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Body ── */
+body {
+  background-color: var(--color-background);
+  color: var(--color-on-surface);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.4s ease, color 0.3s ease;
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  text-align: left;
+  border: none;
+  min-height: 100vh;
+}
+
+/* ── Material Icons ── */
+.material-symbols-outlined {
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+  vertical-align: middle;
+}
+
+/* ── Selection ── */
+::selection {
+  background-color: var(--color-selection-bg);
+  color: var(--color-selection-text);
+}
+
+/* ── Global Utility Classes ── */
+.teal-glow {
+  background: radial-gradient(
+    circle,
+    var(--color-glow-teal) 0%,
+    transparent 70%
+  );
+  filter: blur(80px);
+}
+
+.signature-cta {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-primary-container) 100%
+  );
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-surface-container-low);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-container-highest);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-outline);
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+/* Animation utility classes */
+.anim-fade-in-up {
+  animation: fadeInUp 0.7s ease-out both;
+}
+.anim-fade-in {
+  animation: fadeIn 0.6s ease-out both;
+}
+.anim-slide-left {
+  animation: slideInLeft 0.7s ease-out both;
+}
+.anim-slide-right {
+  animation: slideInRight 0.7s ease-out both;
+}
+.anim-scale-in {
+  animation: scaleIn 0.5s ease-out both;
+}
+
+/* Staggered delays */
+.anim-delay-1 { animation-delay: 0.1s; }
+.anim-delay-2 { animation-delay: 0.2s; }
+.anim-delay-3 { animation-delay: 0.3s; }
+.anim-delay-4 { animation-delay: 0.4s; }
+.anim-delay-5 { animation-delay: 0.5s; }
+.anim-delay-6 { animation-delay: 0.6s; }
+
+/* ============================================
+   RESPONSIVE BREAKPOINTS
+   ============================================ */
+
+/* Tablet: sidebar collapses */
+@media (max-width: 1024px) {
+  .sidebar-layout-main {
+    margin-left: 0 !important;
+  }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .hide-mobile {
+    display: none !important;
+  }
+  .show-mobile {
+    display: flex !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .show-mobile {
+    display: none !important;
+  }
+}

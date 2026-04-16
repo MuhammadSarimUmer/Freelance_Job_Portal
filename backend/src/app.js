@@ -12,6 +12,7 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const technologyRoutes = require('./routes/technologyRoutes');
 const applicationRoutes = require('./routes/applicationRoutes');
 const contractRoutes = require('./routes/contractRoutes');
+const proposalRoutes = require('./routes/proposalRoutes');
 
 const app = express();
 
@@ -24,9 +25,10 @@ const limiter = rateLimit({
 });
 
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173', process.env.CLIENT_URL].filter(Boolean),
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
 }));
 
 app.use(helmet());
@@ -42,6 +44,7 @@ app.use('/api/v1/uploads', uploadRoutes);
 app.use('/api/v1/technologies', technologyRoutes);
 app.use('/api/v1/applications', applicationRoutes);
 app.use('/api/v1/contracts', contractRoutes);
+app.use('/api/v1/proposals', proposalRoutes);
 
 app.use((req, res) => {
     res.status(404).json({
