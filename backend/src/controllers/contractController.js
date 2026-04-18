@@ -215,7 +215,7 @@ const getOpenContracts = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('GetContracts error:', error);
+        console.error('GetOpenContracts error:', error);
         return res.status(500).json({
             success: false,
             message: 'Server error'
@@ -439,6 +439,46 @@ const addContractTech = async (req, res) => {
     }
 };
 
+const removeContractTech = async (req, res) => {
+    try {
+        const { id, techId } = req.params;
+
+        const existing = await prisma.contractTechnology.findUnique({
+            where: {
+                contractID_techID: {
+                    contractID: id,
+                    techID: techId
+                }
+            }
+        });
+
+        if (!existing) {
+            return res.status(404).json({
+                success: false,
+                message: 'Technology not found on this contract'
+            });
+        }
+
+        await prisma.contractTechnology.delete({
+            where: {
+                contractID_techID: {
+                    contractID: id,
+                    techID: techId
+                }
+            }
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Technology removed from contract successfully'
+        });
+
+    } catch (error) {
+        console.error('RemoveContractTech error:', error);
+        return res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
 const assignDeveloper = async (req, res) => {
     try {
         const { id } = req.params;
@@ -563,6 +603,129 @@ const assignDeveloper = async (req, res) => {
     }
 };
 
+const updateTeamMember = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.userId;
+
+        const assignment = await prisma.contractAssignment.findUnique({
+            where: { assignmentID: id },
+            include: {
+                contract: { select: { clientID: true } }
+            }
+        });
+
+        if (!assignment) {
+            return res.status(404).json({
+                success: false,
+                message: 'Assignment not found'
+            });
+        }
+
+        // Verify the requesting client owns the contract
+        const client = await prisma.client.findUnique({
+            where: { userID: userId },
+            select: { clientID: true }
+        });
+
+        if (!client || assignment.contract.clientID !== client.clientID) {
+            return res.status(403).json({
+                success: false,
+                message: 'Forbidden - You do not own this contract'
+            });
+        }
+
+        const allowedFields = ['role', 'contributionPercentage', 'paymentShare'];
+        let updateData = {};
+
+        for (let key of allowedFields) {
+            if (req.body[key] !== undefined) {
+                if (key === 'contributionPercentage' || key === 'paymentShare') {
+                    const val = Number(req.body[key]);
+                    if (isNaN(val)) {
+                        return res.status(400).json({
+                            success: false,
+                            message: `Invalid numeric value for ${key}`
+                        });
+                    }
+                    updateData[key] = new Prisma.Decimal(val);
+                } else {
+                    updateData[key] = req.body[key];
+                }
+            }
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No valid fields provided to update'
+            });
+        }
+
+        const updated = await prisma.contractAssignment.update({
+            where: { assignmentID: id },
+            data: updateData
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Team member updated successfully',
+            data: updated
+        });
+
+    } catch (error) {
+        console.error('UpdateTeamMember error:', error);
+        return res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+const removeTeamMember = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.userId;
+
+        const assignment = await prisma.contractAssignment.findUnique({
+            where: { assignmentID: id },
+            include: {
+                contract: { select: { clientID: true } }
+            }
+        });
+
+        if (!assignment) {
+            return res.status(404).json({
+                success: false,
+                message: 'Assignment not found'
+            });
+        }
+
+        // Verify the requesting client owns the contract
+        const client = await prisma.client.findUnique({
+            where: { userID: userId },
+            select: { clientID: true }
+        });
+
+        if (!client || assignment.contract.clientID !== client.clientID) {
+            return res.status(403).json({
+                success: false,
+                message: 'Forbidden - You do not own this contract'
+            });
+        }
+
+        await prisma.contractAssignment.delete({
+            where: { assignmentID: id }
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Team member removed successfully'
+        });
+
+    } catch (error) {
+        console.error('RemoveTeamMember error:', error);
+        return res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
 const deleteContract = async (req, res) => {
     try {
         const { id } = req.params;
@@ -609,6 +772,9 @@ module.exports = {
     updateContract,
     updateContractStatus,
     addContractTech,
+    removeContractTech,
     assignDeveloper,
+    updateTeamMember,
+    removeTeamMember,
     deleteContract
 };

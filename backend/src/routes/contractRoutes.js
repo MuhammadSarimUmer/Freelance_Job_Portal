@@ -74,12 +74,34 @@ router.post(
     contractController.addContractTech
 );
 
+router.delete(
+    '/:id/tech/:techId',
+    verifyToken,
+    requireRoles(['CLIENT']),
+    checkContractOwner,
+    contractController.removeContractTech
+);
+
 router.post(
     '/:id/team',
     verifyToken,
     requireRoles(['CLIENT']),
     checkContractOwner,
     contractController.assignDeveloper
+);
+
+router.put(
+    '/team/:id',
+    verifyToken,
+    requireRoles(['CLIENT']),
+    contractController.updateTeamMember
+);
+
+router.delete(
+    '/team/:id',
+    verifyToken,
+    requireRoles(['CLIENT']),
+    contractController.removeTeamMember
 );
 
 router.post(

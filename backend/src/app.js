@@ -13,6 +13,10 @@ const technologyRoutes = require('./routes/technologyRoutes');
 const applicationRoutes = require('./routes/applicationRoutes');
 const contractRoutes = require('./routes/contractRoutes');
 const proposalRoutes = require('./routes/proposalRoutes');
+const statsRoutes = require('./routes/statsRoutes');
+const milestoneRoutes = require('./routes/milestoneRoutes');
+const escrowRoutes = require('./routes/escrowRoutes');
+const bugRoutes = require('./routes/bugRoutes');
 
 const app = express();
 
@@ -45,6 +49,10 @@ app.use('/api/v1/technologies', technologyRoutes);
 app.use('/api/v1/applications', applicationRoutes);
 app.use('/api/v1/contracts', contractRoutes);
 app.use('/api/v1/proposals', proposalRoutes);
+app.use('/api/v1/stats', statsRoutes);
+app.use('/api/v1/milestones', milestoneRoutes);
+app.use('/api/v1/escrow', escrowRoutes);
+app.use('/api/v1/bugs', bugRoutes);
 
 app.use((req, res) => {
     res.status(404).json({
