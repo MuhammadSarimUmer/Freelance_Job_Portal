@@ -1,10 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import api from "../api/axiosInstance";
 
 const AuthContext = createContext();
 
-// Helper: extract role from user object returned by backend
 const getRoleFromUser = (user) => {
   if (user?.developer) return "DEVELOPER";
   if (user?.client) return "CLIENT";
@@ -17,7 +16,18 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const refreshTimeoutRef = useRef(null);
 
-  const logout = async () => {
+  const decodeTokenPayload = (jwtToken) => {
+    try {
+      const [, payload] = jwtToken.split(".");
+      if (!payload) return null;
+      return JSON.parse(atob(payload));
+    } catch (error) {
+      console.error("Failed to decode token", error);
+      return null;
+    }
+  };
+
+  const logout = useCallback(async () => {
     try {
       await api.post("/auth/logout");
     } catch (error) {
@@ -30,22 +40,10 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     setUser(null);
     localStorage.removeItem("token");
-  };
+  }, []);
 
-  const decodeTokenPayload = (jwtToken) => {
-    try {
-      const [, payload] = jwtToken.split(".");
-      if (!payload) return null;
-      return JSON.parse(atob(payload));
-    } catch (error) {
-      console.error("Failed to decode token", error);
-      return null;
-    }
-  };
-
-  const scheduleRefresh = (jwtToken) => {
+  const scheduleRefresh = useCallback((jwtToken) => {
     if (!jwtToken) return;
-
     const payload = decodeTokenPayload(jwtToken);
     if (!payload?.exp) return;
 
@@ -56,30 +54,52 @@ export const AuthProvider = ({ children }) => {
       clearTimeout(refreshTimeoutRef.current);
     }
 
-    if (delay <= 0) {
-      refreshTimeoutRef.current = setTimeout(() => handleRefreshToken(), 0);
-      return;
-    }
-
-    refreshTimeoutRef.current = setTimeout(() => handleRefreshToken(), delay);
-  };
-
-  const handleRefreshToken = async () => {
-    try {
-      const { data } = await api.post("/auth/refresh");
-      if (data?.token) {
-        setToken(data.token);
-        localStorage.setItem("token", data.token);
-        scheduleRefresh(data.token);
+    const doRefresh = async () => {
+      try {
+        const { data } = await api.post("/auth/refresh");
+        if (data?.token) {
+          setToken(data.token);
+          localStorage.setItem("token", data.token);
+          scheduleRefresh(data.token);
+        }
+      } catch (error) {
+        console.error("Failed to refresh token", error);
+        logout();
       }
-    } catch (error) {
-      console.error("Failed to refresh token", error);
-      logout();
-    }
-  };
+    };
 
-  const refreshMe = async () => {
-    if (!token) return null;
+    refreshTimeoutRef.current = setTimeout(doRefresh, delay <= 0 ? 0 : delay);
+  }, [logout]);
+
+  // Run ONCE on mount only — reads token from localStorage directly
+  useEffect(() => {
+    const initAuth = async () => {
+      const storedToken = localStorage.getItem("token");
+      if (!storedToken) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const { data } = await api.get("/auth/me");
+        const userWithRole = { ...data.user, role: getRoleFromUser(data.user) };
+        setUser(userWithRole);
+        scheduleRefresh(storedToken);
+      } catch (error) {
+        console.error("Failed to restore session", error);
+        setToken(null);
+        setUser(null);
+        localStorage.removeItem("token");
+      } finally {
+        setLoading(false); // ← always runs, no matter what
+      }
+    };
+
+    initAuth();
+  }, []); // ← empty array: runs ONCE on mount only
+
+  const refreshMe = useCallback(async () => {
+    const storedToken = localStorage.getItem("token");
+    if (!storedToken) return null;
     try {
       const { data } = await api.get("/auth/me");
       const userWithRole = { ...data.user, role: getRoleFromUser(data.user) };
@@ -90,21 +110,7 @@ export const AuthProvider = ({ children }) => {
       logout();
       return null;
     }
-  };
-
-  useEffect(() => {
-    const initAuth = async () => {
-      await refreshMe();
-      setLoading(false);
-    };
-    initAuth();
-  }, [token]);
-
-  useEffect(() => {
-    if (token) {
-      scheduleRefresh(token);
-    }
-  }, [token]);
+  }, [logout]);
 
   const loginContext = async (email, password) => {
     const { data } = await api.post("/auth/login", { email, password });
@@ -143,7 +149,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, refreshMe, login: loginContext, register: registerContext, logout }}>
+    <AuthContext.Provider
+      value={{ user, token, loading, refreshMe, login: loginContext, register: registerContext, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -19,8 +19,6 @@ function Navbar() {
   const [unreadCount, setUnreadCount] = useState(0);
   const notificationRef = useRef(null);
 
-  if (pathname === "/auth") return null;
-
   const fetchNotifications = async () => {
     try {
       const res = await notificationService.getMyNotifications();
@@ -38,7 +36,6 @@ function Navbar() {
       setUnreadCount(0);
       return;
     }
-
     fetchNotifications();
   }, [user?.userID]);
 
@@ -54,6 +51,9 @@ function Navbar() {
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
   }, [notificationsOpen]);
+
+  // ✅ Early return AFTER all hooks
+  if (pathname === "/auth") return null;
 
   const handleToggleNotifications = async (event) => {
     event.stopPropagation();
@@ -165,7 +165,7 @@ function Navbar() {
         style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}
       >
         <ThemePullCord />
-        
+
         {user ? (
           <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
             <div ref={notificationRef} style={{ position: "relative" }}>
