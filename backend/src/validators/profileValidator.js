@@ -28,6 +28,14 @@ const updateDeveloperValidator = [
     body('removeProfileImage')
         .optional()
         .isBoolean().withMessage('removeProfileImage must be a boolean')
+        .toBoolean(),
+    body('removeCv')
+        .optional()
+        .isBoolean().withMessage('removeCv must be a boolean')
+        .toBoolean(),
+    body('removePortfolio')
+        .optional()
+        .isBoolean().withMessage('removePortfolio must be a boolean')
         .toBoolean()
 ];
 

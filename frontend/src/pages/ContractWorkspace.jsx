@@ -34,6 +34,7 @@ function ContractWorkspace() {
   const [isLoadingDisputes, setIsLoadingDisputes] = useState(false);
   const [disputeEdits, setDisputeEdits] = useState({});
   const [isSavingDisputeId, setIsSavingDisputeId] = useState(null);
+  const [teamRoleEdits, setTeamRoleEdits] = useState({});
   const [techOptions, setTechOptions] = useState([]);
   const [selectedTechId, setSelectedTechId] = useState("");
   const [isAddingTech, setIsAddingTech] = useState(false);
@@ -60,6 +61,14 @@ function ContractWorkspace() {
     paymentShare: "0",
   });
   const [isAssigning, setIsAssigning] = useState(false);
+
+  const statusLabelMap = {
+    DRAFT: "OPEN",
+    SIGNED: "SIGNED",
+    IN_PROGRESS: "IN PROGRESS",
+    COMPLETED: "COMPLETED",
+    CANCELLED: "CANCELLED",
+  };
 
   useEffect(() => {
     fetchContractDetails();
@@ -94,6 +103,16 @@ function ContractWorkspace() {
     });
     setDisputeEdits(next);
   }, [disputes]);
+
+  useEffect(() => {
+    const next = {};
+    (contract?.assignments || []).forEach((assignment) => {
+      if (assignment?.assignmentID) {
+        next[assignment.assignmentID] = assignment.role;
+      }
+    });
+    setTeamRoleEdits(next);
+  }, [contract?.assignments]);
 
   useEffect(() => {
     const fetchTechOptions = async () => {
@@ -462,8 +481,8 @@ function ContractWorkspace() {
 
       <main className="sidebar-layout-main" style={{ marginLeft: "256px", flex: 1, padding: "calc(96px + 3rem) 3rem 3rem 3rem" }}>
         
-        {isLoading ? (
-           <p style={{ color: "var(--color-on-surface-variant)" }}>Loading workspace matrix...</p>
+          {isLoading ? (
+            <p style={{ color: "var(--color-on-surface-variant)" }}>Loading contract...</p>
         ) : loadError ? (
            <p style={{ color: "var(--color-error)" }}>{loadError}</p>
         ) : !contract ? (
@@ -477,16 +496,10 @@ function ContractWorkspace() {
                   {contract.title}
                 </h1>
                 <p style={{ color: "var(--color-primary)", marginTop: "0.5rem", fontFamily: "var(--font-body)", textTransform: "uppercase", letterSpacing: "0.1em", fontSize: "0.85rem" }}>
-                  Status: {contract.status.replace('_', ' ')} • Budget: ${contract.totalAmount ?? contract.budget ?? 0}
+                  Status: {statusLabelMap[contract.status] || contract.status.replace('_', ' ')} • Budget: ${contract.totalAmount ?? contract.budget ?? 0}
                 </p>
               </div>
               <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                <button
-                  className="neon-btn"
-                  onClick={() => openEscrowForMilestone(contract?.milestones?.[0]?.milestoneID)}
-                >
-                  Manage Escrow
-                </button>
                 {contract.status === "COMPLETED" && !existingReview ? (
                   <button
                     type="button"
@@ -832,12 +845,22 @@ function ContractWorkspace() {
                             <td style={{ padding: "12px 0" }}>
                               {user?.role === "CLIENT" ? (
                                 <select
-                                  defaultValue={a.role}
+                                  value={teamRoleEdits[a.assignmentID] ?? a.role ?? "DEVELOPER"}
                                   onChange={async (e) => {
+                                    const nextRole = e.target.value;
+                                    const previousRole = teamRoleEdits[a.assignmentID] ?? a.role;
+                                    setTeamRoleEdits((prev) => ({
+                                      ...prev,
+                                      [a.assignmentID]: nextRole,
+                                    }));
                                     try {
-                                      await contractService.updateTeamMember(a.assignmentID, { role: e.target.value });
+                                      await contractService.updateTeamMember(a.assignmentID, { role: nextRole });
                                       fetchContractDetails();
                                     } catch (err) {
+                                      setTeamRoleEdits((prev) => ({
+                                        ...prev,
+                                        [a.assignmentID]: previousRole,
+                                      }));
                                       addToast(err?.response?.data?.message || "Failed to update team member.", "error");
                                     }
                                   }}
@@ -978,7 +1001,7 @@ function ContractWorkspace() {
                           style={{ padding: "1rem", border: "1px solid var(--color-outline-variant)", borderRadius: 6, background: "var(--color-surface-container)" }}
                         >
                           <p style={{ margin: 0, fontFamily: "var(--font-headline)", fontWeight: 700 }}>
-                            Raised by {dispute.raisedBy?.fullName || "Member"}
+                            Raised by {dispute.raisedBy?.fullName || "A team member"}
                           </p>
                           <p style={{ margin: "0.35rem 0", color: "var(--color-on-surface-variant)", fontSize: "0.85rem" }}>
                             {dispute.reason}

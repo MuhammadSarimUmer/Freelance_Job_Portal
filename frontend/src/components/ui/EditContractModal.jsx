@@ -156,7 +156,7 @@ function EditContractModal({ contract, onClose, onSaved }) {
             marginBottom: "2.5rem",
           }}
         >
-          Modify the scope, budget, or deadline of your published contract.
+          Modify the scope, budget, or deadline of your open contract.
         </p>
 
         <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>

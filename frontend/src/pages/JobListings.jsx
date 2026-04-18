@@ -131,6 +131,29 @@ function JobListings() {
       background-color: var(--color-outline-variant-strong);
       border-radius: 4px;
     }
+    .job-skeleton {
+      background: var(--color-surface-container-low);
+      border: 1px solid var(--color-outline-variant);
+      border-radius: 8px;
+      padding: 2rem;
+      display: grid;
+      gap: 0.75rem;
+      animation: shimmer 1.6s infinite;
+      background-image: linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 100%);
+      background-size: 200% 100%;
+    }
+    .job-skeleton-line {
+      height: 12px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.08);
+    }
+    .job-skeleton-line.large { height: 20px; width: 70%; }
+    .job-skeleton-line.medium { width: 50%; }
+    .job-skeleton-line.small { width: 35%; }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
     @media (max-width: 1024px) {
       .jobs-layout {
         flex-direction: column;
@@ -513,8 +536,16 @@ function JobListings() {
                 Showing {filteredJobs.length} of {allJobs.length} open contracts
               </p>
               {isLoading ? (
-                <div style={{ background: "var(--color-surface-container-low)", padding: "2rem", borderRadius: "8px", border: "1px solid var(--color-outline-variant)" }}>
-                  <p style={{ color: "var(--color-secondary)", margin: 0 }}>Loading open contracts...</p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "2rem" }}>
+                  {Array.from({ length: 6 }).map((_, idx) => (
+                    <div key={idx} className="job-skeleton">
+                      <div className="job-skeleton-line large" />
+                      <div className="job-skeleton-line medium" />
+                      <div className="job-skeleton-line" style={{ height: 60 }} />
+                      <div className="job-skeleton-line small" />
+                      <div className="job-skeleton-line" style={{ height: 36, borderRadius: 6 }} />
+                    </div>
+                  ))}
                 </div>
               ) : filteredJobs.length > 0 ? (
                 <div

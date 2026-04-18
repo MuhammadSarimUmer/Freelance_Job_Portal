@@ -7,10 +7,12 @@ import ManageApplicationsModal from "../components/ui/ManageApplicationsModal";
 import { useAuth } from "../context/AuthContext";
 import { contractService } from "../api/services/contractService";
 import { statsService } from "../api/services/statsService";
+import { useToast } from "../context/ToastContext";
 
 function ClientDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { addToast } = useToast();
   const [contracts, setContracts] = useState([]);
   const [selectedContract, setSelectedContract] = useState(null);
   const [editingContract, setEditingContract] = useState(null);
@@ -24,6 +26,16 @@ function ClientDashboard() {
     { label: "Escrow Held", value: "$0", icon: "lock" },
     { label: "Escrow Released", value: "$0", icon: "lock_open" },
   ]);
+
+  const statusLabelMap = {
+    DRAFT: "OPEN",
+    SIGNED: "SIGNED",
+    IN_PROGRESS: "IN PROGRESS",
+    COMPLETED: "COMPLETED",
+    CANCELLED: "CANCELLED",
+  };
+
+  const getStatusLabel = (status) => statusLabelMap[status] || status;
 
   const fetchContracts = async () => {
     try {
@@ -77,7 +89,7 @@ function ClientDashboard() {
             onClick={(e) => e.stopPropagation()}
             style={{ width: "100%", maxWidth: "700px", background: "var(--color-surface-container-low)", border: "1px solid var(--color-outline-variant)", borderRadius: "8px", padding: "2rem" }}
           >
-            <h3 style={{ marginTop: 0, fontFamily: "var(--font-headline)" }}>Edit Draft Contract</h3>
+            <h3 style={{ marginTop: 0, fontFamily: "var(--font-headline)" }}>Edit Contract</h3>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
               <input value={editForm.title} onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))} placeholder="Title" style={{ padding: "0.75rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "4px" }} />
               <input type="number" value={editForm.totalAmount} onChange={(e) => setEditForm((prev) => ({ ...prev, totalAmount: e.target.value }))} placeholder="Budget" style={{ padding: "0.75rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "4px" }} />
@@ -90,11 +102,20 @@ function ClientDashboard() {
                 className="signature-cta"
                 onClick={async () => {
                   try {
+                    if (!editForm.title || !editForm.description || !editForm.totalAmount || !editForm.startDate) {
+                      addToast("Fill in title, description, budget, and start date before saving.", "error");
+                      return;
+                    }
+                    const amountValue = Number(editForm.totalAmount);
+                    if (Number.isNaN(amountValue) || amountValue <= 0) {
+                      addToast("Budget must be a valid number greater than zero.", "error");
+                      return;
+                    }
                     setIsUpdatingContract(true);
                     await contractService.updateContract(editingContract.contractID, {
                       title: editForm.title,
                       description: editForm.description,
-                      totalAmount: Number(editForm.totalAmount),
+                      totalAmount: amountValue,
                       startDate: editForm.startDate,
                       endDate: editForm.endDate || null,
                     });
@@ -339,6 +360,9 @@ function ClientDashboard() {
               }}
             />
           </div>
+          <p style={{ marginTop: "-1rem", marginBottom: "1.5rem", color: "var(--color-outline)", fontSize: "0.85rem" }}>
+            Open contracts are visible to developers. You can edit them until a developer is assigned.
+          </p>
 
           <div style={{ background: "var(--color-surface-container-low)", overflowX: "auto", borderRadius: "8px", border: "1px solid var(--color-outline-variant)" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
@@ -475,7 +499,7 @@ function ClientDashboard() {
                           borderRadius: "4px"
                         }}
                       >
-                        {contract.status}
+                        {getStatusLabel(contract.status)}
                       </span>
                     </td>
                     <td style={{ padding: "1.75rem 2rem", textAlign: "right" }}>
@@ -512,17 +536,7 @@ function ClientDashboard() {
                           <button
                             onClick={async (e) => {
                               e.stopPropagation();
-                              await contractService.updateContractStatus(contract.contractID, "SIGNED");
-                              await fetchContracts();
-                            }}
-                            style={{ border: "none", background: "var(--color-primary-container)", color: "var(--color-on-primary-container)", borderRadius: "4px", padding: "0.4rem 0.7rem", cursor: "pointer" }}
-                          >
-                            Publish
-                          </button>
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              if (!window.confirm("Delete this draft contract?")) return;
+                              if (!window.confirm("Delete this open contract?")) return;
                               await contractService.deleteContract(contract.contractID);
                               await fetchContracts();
                             }}

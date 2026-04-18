@@ -47,6 +47,8 @@ function ProfileSettings() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [removeProfileImage, setRemoveProfileImage] = useState(false);
+  const [removeCv, setRemoveCv] = useState(false);
+  const [removePortfolio, setRemovePortfolio] = useState(false);
   const [profileImageFile, setProfileImageFile] = useState(null);
   const [cvFile, setCvFile] = useState(null);
   const [isUploadingCv, setIsUploadingCv] = useState(false);
@@ -54,8 +56,15 @@ function ProfileSettings() {
 
   const [portfolioUploadFile, setPortfolioUploadFile] = useState(null);
   const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
+  const [profileImagePreviewUrl, setProfileImagePreviewUrl] = useState("");
+  const [portfolioPreviewUrl, setPortfolioPreviewUrl] = useState("");
+  const [cvPreviewUrl, setCvPreviewUrl] = useState("");
 
   const hasCv = Boolean(user?.developer?.cvUrl);
+  const hasPortfolio = Boolean(user?.developer?.portfolioURL);
+
+  const isImageUrl = (url) => /\.(png|jpe?g|webp|gif|bmp)(\?.*)?$/i.test(url || "");
+  const isPdfUrl = (url) => /\.pdf(\?.*)?$/i.test(url || "");
 
   const hydrateFromUser = () => {
     if (!user) return;
@@ -134,6 +143,60 @@ function ProfileSettings() {
     // When enabling removal, ensure no file is pending.
     setProfileImageFile(null);
   };
+
+  const handleToggleRemoveCv = (next) => {
+    const enabled = Boolean(next);
+    if (enabled && cvFile) {
+      addToast("Cannot upload and remove a CV in the same request.", "error");
+      return;
+    }
+    setRemoveCv(enabled);
+    if (enabled) {
+      setCvFile(null);
+    }
+  };
+
+  const handleToggleRemovePortfolio = (next) => {
+    const enabled = Boolean(next);
+    if (enabled && portfolioUploadFile) {
+      addToast("Cannot upload and remove a portfolio asset in the same request.", "error");
+      return;
+    }
+    setRemovePortfolio(enabled);
+    if (enabled) {
+      setPortfolioUploadFile(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!profileImageFile) {
+      setProfileImagePreviewUrl("");
+      return;
+    }
+    const url = URL.createObjectURL(profileImageFile);
+    setProfileImagePreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [profileImageFile]);
+
+  useEffect(() => {
+    if (!portfolioUploadFile || !portfolioUploadFile.type?.startsWith("image/")) {
+      setPortfolioPreviewUrl("");
+      return;
+    }
+    const url = URL.createObjectURL(portfolioUploadFile);
+    setPortfolioPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [portfolioUploadFile]);
+
+  useEffect(() => {
+    if (!cvFile || !cvFile.type?.startsWith("image/")) {
+      setCvPreviewUrl("");
+      return;
+    }
+    const url = URL.createObjectURL(cvFile);
+    setCvPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [cvFile]);
 
   const handleAddSkill = async (e) => {
     e.preventDefault();
@@ -275,6 +338,8 @@ function ProfileSettings() {
     setNewTechName("");
     setNewTechCategory("");
     setRemoveProfileImage(false);
+    setRemoveCv(false);
+    setRemovePortfolio(false);
     setProfileImageFile(null);
     setCvFile(null);
     setPortfolioUploadFile(null);
@@ -314,6 +379,14 @@ function ProfileSettings() {
       addToast("Cannot upload and remove a profile image in the same request.", "error");
       return;
     }
+    if (removeCv && cvFile) {
+      addToast("Cannot upload and remove a CV in the same request.", "error");
+      return;
+    }
+    if (removePortfolio && portfolioUploadFile) {
+      addToast("Cannot upload and remove a portfolio asset in the same request.", "error");
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -323,11 +396,13 @@ function ProfileSettings() {
         if (formData.fullName.trim() !== "") fd.append("fullName", formData.fullName.trim());
         if (formData.phoneNumber.trim() !== "") fd.append("phoneNumber", formData.phoneNumber.trim());
         if (formData.hourlyRate.trim() !== "") fd.append("hourlyRate", formData.hourlyRate.trim());
-        if (formData.portfolioURL.trim() !== "") fd.append("portfolioURL", formData.portfolioURL.trim());
+        if (!removePortfolio && formData.portfolioURL.trim() !== "") fd.append("portfolioURL", formData.portfolioURL.trim());
         if (formData.availabilityStatus) fd.append("availabilityStatus", formData.availabilityStatus);
         if (formData.experienceYears.trim() !== "") fd.append("experienceYears", formData.experienceYears.trim());
 
         if (removeProfileImage) fd.append("removeProfileImage", "true");
+        if (removeCv) fd.append("removeCv", "true");
+        if (removePortfolio) fd.append("removePortfolio", "true");
         if (profileImageFile) fd.append("file", profileImageFile);
 
         await profileService.updateMyDeveloperProfile(fd);
@@ -348,6 +423,8 @@ function ProfileSettings() {
       await refreshMe();
       // Clear file controls after successful update.
       setRemoveProfileImage(false);
+      setRemoveCv(false);
+      setRemovePortfolio(false);
       setProfileImageFile(null);
     } catch (err) {
       addToast(
@@ -361,6 +438,10 @@ function ProfileSettings() {
 
   const handleCvUpload = async () => {
     if (!isDeveloper || authLoading) return;
+    if (removeCv) {
+      addToast("Disable 'Remove CV' before uploading a new file.", "error");
+      return;
+    }
     if (!cvFile) {
       addToast("Select a CV file to upload.", "error");
       return;
@@ -399,6 +480,10 @@ function ProfileSettings() {
 
   const handlePortfolioUpload = async () => {
     if (!isDeveloper || authLoading) return;
+    if (removePortfolio) {
+      addToast("Disable 'Remove portfolio asset' before uploading a new file.", "error");
+      return;
+    }
     if (!portfolioUploadFile) {
       addToast("Select a portfolio file to upload.", "error");
       return;
@@ -582,6 +667,18 @@ function ProfileSettings() {
                     
                     <FormField label="Portfolio URL">
                       <input type="url" className="input-field" name="portfolioURL" value={formData.portfolioURL} onChange={handleInput} />
+                      {hasPortfolio ? (
+                        <div style={{ marginTop: "0.75rem" }}>
+                          <a
+                            href={user?.developer?.portfolioURL}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ color: "var(--color-primary)", fontSize: "0.85rem" }}
+                          >
+                            View current portfolio
+                          </a>
+                        </div>
+                      ) : null}
                     </FormField>
 
                     <FormField label="Portfolio Asset" hint="Upload an image/PDF to auto-populate your portfolio URL.">
@@ -594,7 +691,7 @@ function ProfileSettings() {
                           const file = e.target.files?.[0] || null;
                           setPortfolioUploadFile(file);
                         }}
-                        disabled={isUploadingPortfolio}
+                        disabled={isUploadingPortfolio || removePortfolio}
                       />
                       <button
                         type="button"
@@ -618,6 +715,33 @@ function ProfileSettings() {
                       >
                         {isUploadingPortfolio ? "Uploading..." : "Upload Asset"}
                       </button>
+                      {portfolioPreviewUrl || (hasPortfolio && isImageUrl(user?.developer?.portfolioURL)) ? (
+                        <div style={{ marginTop: "1rem", display: "flex", alignItems: "center", gap: "1rem" }}>
+                          <img
+                            src={portfolioPreviewUrl || user?.developer?.portfolioURL}
+                            alt="Portfolio preview"
+                            style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", border: "1px solid var(--color-outline-variant)" }}
+                          />
+                          <div style={{ fontSize: "0.85rem", color: "var(--color-on-surface-variant)" }}>
+                            Portfolio preview
+                          </div>
+                        </div>
+                      ) : null}
+                      {hasPortfolio && !isImageUrl(user?.developer?.portfolioURL) && !portfolioPreviewUrl ? (
+                        <div style={{ marginTop: "0.75rem", fontSize: "0.85rem", color: "var(--color-on-surface-variant)" }}>
+                          {isPdfUrl(user?.developer?.portfolioURL) ? "Portfolio PDF ready." : "Portfolio link saved."}
+                        </div>
+                      ) : null}
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "1rem", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={removePortfolio}
+                          onChange={(e) => handleToggleRemovePortfolio(e.target.checked)}
+                        />
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: "0.9rem", color: "var(--color-on-surface-variant)" }}>
+                          Remove portfolio asset
+                        </span>
+                      </label>
                     </FormField>
 
                     <FormField label="Profile Image" hint="JPEG, PNG, WebP (max 5MB).">
@@ -629,6 +753,18 @@ function ProfileSettings() {
                         onChange={handleFileChange}
                         disabled={removeProfileImage}
                       />
+                      {profileImagePreviewUrl || user?.profileImageUrl ? (
+                        <div style={{ marginTop: "1rem", display: "flex", alignItems: "center", gap: "1rem" }}>
+                          <img
+                            src={profileImagePreviewUrl || user?.profileImageUrl}
+                            alt="Profile preview"
+                            style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--color-outline-variant)" }}
+                          />
+                          <div style={{ fontSize: "0.85rem", color: "var(--color-on-surface-variant)" }}>
+                            Profile image preview
+                          </div>
+                        </div>
+                      ) : null}
                       <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "1rem", cursor: "pointer" }}>
                         <input
                           type="checkbox"
@@ -651,7 +787,7 @@ function ProfileSettings() {
                           const file = e.target.files?.[0] || null;
                           setCvFile(file);
                         }}
-                        disabled={isUploadingCv}
+                        disabled={isUploadingCv || removeCv}
                       />
                       <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginTop: "0.75rem" }}>
                         <button
@@ -697,6 +833,40 @@ function ProfileSettings() {
                           </button>
                         ) : null}
                       </div>
+                      {cvPreviewUrl || (hasCv && isImageUrl(user?.developer?.cvUrl)) ? (
+                        <div style={{ marginTop: "1rem", display: "flex", alignItems: "center", gap: "1rem" }}>
+                          <img
+                            src={cvPreviewUrl || user?.developer?.cvUrl}
+                            alt="CV preview"
+                            style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", border: "1px solid var(--color-outline-variant)" }}
+                          />
+                          <div style={{ fontSize: "0.85rem", color: "var(--color-on-surface-variant)" }}>
+                            CV preview
+                          </div>
+                        </div>
+                      ) : null}
+                      {hasCv && isPdfUrl(user?.developer?.cvUrl) && !cvPreviewUrl ? (
+                        <iframe
+                          title="CV preview"
+                          src={user?.developer?.cvUrl}
+                          style={{ marginTop: "1rem", width: "100%", height: "200px", border: "1px solid var(--color-outline-variant)", borderRadius: "6px" }}
+                        />
+                      ) : null}
+                      {hasCv && !isImageUrl(user?.developer?.cvUrl) && !isPdfUrl(user?.developer?.cvUrl) && !cvPreviewUrl ? (
+                        <div style={{ marginTop: "0.75rem", fontSize: "0.85rem", color: "var(--color-on-surface-variant)" }}>
+                          CV file saved.
+                        </div>
+                      ) : null}
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "1rem", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={removeCv}
+                          onChange={(e) => handleToggleRemoveCv(e.target.checked)}
+                        />
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: "0.9rem", color: "var(--color-on-surface-variant)" }}>
+                          Remove CV
+                        </span>
+                      </label>
                     </FormField>
 
                     <div>
@@ -998,6 +1168,18 @@ function ProfileSettings() {
                         onChange={handleFileChange}
                         disabled={removeProfileImage}
                       />
+                      {profileImagePreviewUrl || user?.profileImageUrl ? (
+                        <div style={{ marginTop: "1rem", display: "flex", alignItems: "center", gap: "1rem" }}>
+                          <img
+                            src={profileImagePreviewUrl || user?.profileImageUrl}
+                            alt="Profile preview"
+                            style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--color-outline-variant)" }}
+                          />
+                          <div style={{ fontSize: "0.85rem", color: "var(--color-on-surface-variant)" }}>
+                            Profile image preview
+                          </div>
+                        </div>
+                      ) : null}
                       <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "1rem", cursor: "pointer" }}>
                         <input
                           type="checkbox"

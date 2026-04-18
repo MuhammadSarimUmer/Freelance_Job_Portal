@@ -80,7 +80,7 @@ const getDeveloperById = async (req, res) => {
 
 const updateDeveloperMe = async (req, res) => {
     try {
-        const { fullName, phoneNumber, hourlyRate, portfolioURL, availabilityStatus, experienceYears, removeProfileImage, cvUrl } = req.body;
+        const { fullName, phoneNumber, hourlyRate, portfolioURL, availabilityStatus, experienceYears, removeProfileImage, cvUrl, removeCv, removePortfolio } = req.body;
 
         const userData = {};
         if (fullName !== undefined) userData.fullName = fullName;
@@ -104,8 +104,17 @@ const updateDeveloperMe = async (req, res) => {
             }
             developerData.hourlyRate = parsedRate;
         }
-        if (portfolioURL !== undefined) developerData.portfolioURL = portfolioURL;
-        if (cvUrl !== undefined) developerData.cvUrl = cvUrl;
+        if (removePortfolio) {
+            developerData.portfolioURL = null;
+        } else if (portfolioURL !== undefined) {
+            developerData.portfolioURL = portfolioURL;
+        }
+
+        if (removeCv) {
+            developerData.cvUrl = null;
+        } else if (cvUrl !== undefined) {
+            developerData.cvUrl = cvUrl;
+        }
         if (availabilityStatus !== undefined) developerData.availabilityStatus = availabilityStatus;
         if (experienceYears !== undefined) {
             const parsedYears = Number(experienceYears);

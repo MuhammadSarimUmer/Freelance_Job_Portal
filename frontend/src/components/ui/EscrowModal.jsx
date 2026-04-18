@@ -1,22 +1,33 @@
 import { useState } from "react";
 import { escrowService } from "../../api/services/escrowService";
+import { useToast } from "../../context/ToastContext";
 
 function EscrowModal({ milestoneId, onClose }) {
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const { addToast } = useToast();
 
   const handleDeposit = async () => {
     try {
-      if (!milestoneId) return;
+      if (!milestoneId) {
+        addToast("Select a milestone to fund escrow.", "error");
+        return;
+      }
+
+      const parsed = Number(amount);
+      if (!amount || Number.isNaN(parsed) || parsed <= 0) {
+        addToast("Enter a valid amount greater than zero.", "error");
+        return;
+      }
       setIsProcessing(true);
       await escrowService.depositToEscrow({
         milestoneID: milestoneId,
-        depositAmount: Number(amount),
+        depositAmount: parsed,
       });
       onClose();
     } catch (err) {
       console.error(err);
-      onClose();
+      addToast(err?.response?.data?.message || "Deposit failed.", "error");
     } finally {
       setIsProcessing(false);
     }
@@ -76,7 +87,7 @@ function EscrowModal({ milestoneId, onClose }) {
               onClick={onClose}
               style={{ background: "transparent", color: "var(--color-primary)", border: "none", cursor: "pointer", fontFamily: "var(--font-headline)" }}
             >
-              Abort
+              Cancel
             </button>
             <button 
               onClick={handleDeposit}

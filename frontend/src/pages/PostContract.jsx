@@ -5,16 +5,18 @@ import { useToast } from "../context/ToastContext";
 import { useAuth } from "../context/AuthContext";
 import { postContractSteps } from "../data/mockData";
 import { contractService, applicationService } from "../api/services/contractService";
+import { milestoneService } from "../api/services/milestoneService";
 import { skillsService } from "../api/services/skillsService";
 import { normalizeTechName } from "../utils/techName";
 
-function PostContract() {
+const PostContract = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { addToast } = useToast();
   const [step, setStep] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
   const [milestones, setMilestones] = useState([]);
+  const [milestoneDeferred, setMilestoneDeferred] = useState(false);
   const [techOptions, setTechOptions] = useState([]);
   const [customTechName, setCustomTechName] = useState("");
   const [customTechCategory, setCustomTechCategory] = useState("");
@@ -34,23 +36,94 @@ function PostContract() {
     techTags: [],
   });
 
+  const budgetValue = Number(formData.budget || 0);
+  const totalMilestoneAmount = milestones.reduce((sum, milestone) => sum + Number(milestone.amount || 0), 0);
+  const remainingBudget = Math.max(budgetValue - totalMilestoneAmount, 0);
+
   const handleInput = (e) =>
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
   const addMilestone = () => {
+    const amountValue = Number(milestoneDraft.amount);
     if (!milestoneDraft.title.trim() || !milestoneDraft.amount || !milestoneDraft.due) {
       addToast("Provide milestone title, amount and due date first.", "error");
       return;
     }
+    if (Number.isNaN(amountValue) || amountValue <= 0) {
+      addToast("Milestone amount must be greater than zero.", "error");
+      return;
+    }
+    if (Number(formData.budget || 0) > 0 && amountValue > remainingBudget) {
+      addToast("Milestone exceeds remaining budget.", "error");
+      return;
+    }
+    setMilestoneDeferred(false);
     setMilestones((prev) => [
       ...prev,
       {
+        id: crypto.randomUUID(),
         title: milestoneDraft.title.trim(),
-        amount: `$${Number(milestoneDraft.amount).toLocaleString()}`,
-        due: new Date(milestoneDraft.due).toLocaleDateString(),
+        amount: amountValue,
+        dueDate: milestoneDraft.due,
       },
     ]);
     setMilestoneDraft({ title: "", amount: "", due: "" });
+  };
+
+  const removeMilestone = (id) => {
+    setMilestones((prev) => {
+      const next = prev.filter((milestone) => milestone.id !== id);
+      if (next.length === 0) {
+        setMilestoneDeferred(false);
+      }
+      return next;
+    });
+  };
+
+  const generateMilestones = (count = 3) => {
+    const budgetValue = Number(formData.budget || 0);
+    if (!budgetValue || budgetValue <= 0) {
+      addToast("Add a total budget before generating milestones.", "error");
+      return;
+    }
+    const startBase = formData.startDate ? new Date(formData.startDate) : new Date();
+    const endBase = formData.endDate ? new Date(formData.endDate) : null;
+    const rangeMs = endBase && endBase > startBase ? endBase - startBase : null;
+    const stepMs = rangeMs ? Math.floor(rangeMs / count) : 1000 * 60 * 60 * 24 * 14;
+    const baseAmount = Math.floor((budgetValue / count) * 100) / 100;
+    const milestonesGenerated = Array.from({ length: count }).map((_, index) => {
+      const isLast = index === count - 1;
+      const amount = isLast
+        ? Math.max(0, Math.round((budgetValue - baseAmount * (count - 1)) * 100) / 100)
+        : baseAmount;
+      const dueDate = new Date(startBase.getTime() + stepMs * (index + 1));
+      return {
+        id: crypto.randomUUID(),
+        title: `Milestone ${index + 1}`,
+        amount,
+        dueDate: dueDate.toISOString().slice(0, 10),
+      };
+    });
+    setMilestoneDeferred(false);
+    setMilestones(milestonesGenerated);
+  };
+
+  const deferMilestones = () => {
+    const budgetValue = Number(formData.budget || 0);
+    if (!budgetValue || budgetValue <= 0) {
+      addToast("Add a total budget before deferring milestones.", "error");
+      return;
+    }
+    const dueDate = formData.endDate || formData.startDate || new Date().toISOString().slice(0, 10);
+    setMilestoneDeferred(true);
+    setMilestones([
+      {
+        id: crypto.randomUUID(),
+        title: "Milestones to be defined",
+        amount: budgetValue,
+        dueDate,
+      },
+    ]);
   };
 
   useEffect(() => {
@@ -70,20 +143,24 @@ function PostContract() {
       addToast("Enter a technology name.", "error");
       return;
     }
-    if (!customTechCategory.trim()) {
-      addToast("Enter a category for the technology.", "error");
-      return;
-    }
+    const categoryValue = customTechCategory.trim() || "Custom";
 
     setIsCreatingTech(true);
     try {
+      const normalized = normalizeTechName(customTechName.trim());
       await skillsService.createTechnology({
         techName: customTechName.trim(),
-        category: customTechCategory.trim(),
+        category: categoryValue,
       });
       addToast("Technology added.", "success");
       setCustomTechName("");
       setCustomTechCategory("");
+      setFormData((prev) => ({
+        ...prev,
+        techTags: prev.techTags.includes(normalized)
+          ? prev.techTags
+          : [...prev.techTags, normalized],
+      }));
       const res = await skillsService.getAllTechnologies();
       setTechOptions(res.data?.data || []);
     } catch (err) {
@@ -116,6 +193,14 @@ function PostContract() {
       }
       if (!formData.appName) {
         addToast("App name is required in Step 1.", "error");
+        return;
+      }
+      if (milestones.length === 0) {
+        addToast("Add at least one milestone or choose 'Discuss later'.", "error");
+        return;
+      }
+      if (budgetValue > 0 && totalMilestoneAmount > budgetValue) {
+        addToast("Milestones exceed the total budget.", "error");
         return;
       }
       setIsProcessing(true);
@@ -154,6 +239,18 @@ function PostContract() {
         ));
       }
 
+      if (contractID && milestones.length > 0) {
+        await Promise.all(milestones.map((milestone) =>
+          milestoneService.createMilestone({
+            contractID,
+            title: milestone.title,
+            description: milestoneDeferred ? "Milestones to be refined after kickoff." : "",
+            dueDate: milestone.dueDate,
+            milestoneAmount: Number(milestone.amount),
+          })
+        ));
+      }
+
       addToast("Contract compiled and dispatched successfully.", "success");
       navigate("/client/dashboard");
     } catch (err) {
@@ -164,6 +261,21 @@ function PostContract() {
   };
 
   const progress = (step / 4) * 100;
+  const milestoneCoverage = budgetValue > 0 ? Math.min(totalMilestoneAmount / budgetValue, 1) : 0;
+  const matchStrength = Math.min(
+    100,
+    Math.round(
+      25 +
+      (formData.appName ? 10 : 0) +
+      (formData.description ? 10 : 0) +
+      (formData.title ? 10 : 0) +
+      (formData.budget ? 10 : 0) +
+      (formData.startDate ? 5 : 0) +
+      (formData.techTags.length ? 10 : 0) +
+      (milestones.length ? 15 : 0) +
+      Math.round(milestoneCoverage * 5)
+    )
+  );
   const appTypeLabelMap = {
     WEB: "Web Application",
     MOBILE: "Mobile App",
@@ -172,6 +284,33 @@ function PostContract() {
   };
   const appTypeLabel = appTypeLabelMap[formData.appType] || "Web Application";
 
+  const isStep1Complete = Boolean(formData.appName.trim()) && Boolean(formData.description.trim());
+  const isStep2Complete = Boolean(formData.title.trim()) && Boolean(formData.description.trim()) && budgetValue > 0 && Boolean(formData.startDate);
+  const isStep3Complete = milestones.length > 0 && (budgetValue === 0 || totalMilestoneAmount <= budgetValue);
+  const canContinue = step === 1 ? isStep1Complete : step === 2 ? isStep2Complete : step === 3 ? isStep3Complete : true;
+
+  const handleStepChange = (nextStep) => {
+    if (nextStep <= step) {
+      setStep(nextStep);
+      return;
+    }
+
+    const checks = [
+      { step: 1, ok: isStep1Complete, message: "Complete the app details before continuing." },
+      { step: 2, ok: isStep2Complete, message: "Complete the contract info before continuing." },
+      { step: 3, ok: isStep3Complete, message: "Add milestones that fit within the budget." },
+    ];
+
+    for (const check of checks) {
+      if (nextStep > check.step && !check.ok) {
+        addToast(check.message, "error");
+        return;
+      }
+    }
+
+    setStep(nextStep);
+  };
+
   // Inject scoped styles for responsiveness
   const layoutStyles = `
     .post-contract-grid {
@@ -179,8 +318,31 @@ function PostContract() {
       grid-template-columns: 1fr 380px;
       gap: 3rem;
     }
+    .tech-add-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+      gap: 0.75rem;
+      align-items: center;
+    }
+    .tech-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      font-family: var(--font-label);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
     @media (max-width: 1024px) {
       .post-contract-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 900px) {
+      .tech-add-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -241,8 +403,8 @@ function PostContract() {
                     maxWidth: "36rem",
                   }}
                 >
-                  Define the product brief, publish the contract, and open the
-                  hiring lane for developer proposals or direct invitations.
+                  Define the product brief, open the contract, and invite
+                  developers for proposals or direct invitations.
                 </p>
               </header>
 
@@ -308,7 +470,7 @@ function PostContract() {
                         gap: "0.5rem",
                         cursor: "pointer",
                       }}
-                      onClick={() => setStep(i + 1)}
+                      onClick={() => handleStepChange(i + 1)}
                     >
                       <div
                         style={{
@@ -718,7 +880,7 @@ function PostContract() {
                         >
                           Tech Stack
                         </label>
-                        <div style={{ display: "grid", gridTemplateColumns: "1.25fr 1fr auto", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                        <div className="tech-add-grid" style={{ marginBottom: "0.75rem" }}>
                           <input
                             placeholder="Add a tech (e.g. Rust)"
                             value={customTechName}
@@ -754,72 +916,55 @@ function PostContract() {
                             {isCreatingTech ? "Adding..." : "Add"}
                           </button>
                         </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: "0.5rem",
-                            marginTop: "0.5rem",
-                          }}
-                        >
-                          {formData.techTags.map((tag) => (
-                            <span
-                              key={tag}
-                              style={{
-                                background: "var(--color-secondary)",
-                                color: "var(--color-on-secondary-container)",
-                                padding: "2px 10px",
-                                fontSize: "0.7rem",
-                                textTransform: "uppercase",
-                                fontFamily: "var(--font-label)",
-                                fontWeight: 700,
-                                borderRadius: "4px",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "0.35rem",
-                              }}
-                            >
-                              {normalizeTechName(tag)}
-                              <button
-                                type="button"
-                                onClick={() => toggleTechTag(tag)}
-                                style={{
-                                  background: "transparent",
-                                  border: "none",
-                                  color: "var(--color-on-secondary-container)",
-                                  cursor: "pointer",
-                                  fontWeight: 700,
-                                  padding: 0,
-                                  lineHeight: 1,
-                                }}
-                              >
-                                x
-                              </button>
-                            </span>
-                          ))}
-                          {techOptions.slice(0, 12).map((tech) => (
-                            <span
-                              key={tech.techID}
-                              onClick={() => toggleTechTag(tech.techName)}
-                              style={{
-                                background: formData.techTags.includes(normalizeTechName(tech.techName))
-                                  ? "var(--color-secondary)"
-                                  : "var(--color-surface-container-highest)",
-                                color: formData.techTags.includes(normalizeTechName(tech.techName))
-                                  ? "var(--color-on-secondary-container)"
-                                  : "var(--color-secondary)",
-                                padding: "2px 10px",
-                                fontSize: "0.7rem",
-                                textTransform: "uppercase",
-                                fontFamily: "var(--font-label)",
-                                fontWeight: 700,
-                                cursor: "pointer",
-                                borderRadius: "4px"
-                              }}
-                            >
-                              {normalizeTechName(tech.techName)}
-                            </span>
-                          ))}
+                        <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.75rem" }}>
+                          <div>
+                            <div style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--color-outline)", fontFamily: "var(--font-label)" }}>
+                              Selected
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.4rem" }}>
+                              {formData.techTags.length > 0 ? (
+                                formData.techTags.map((tag) => (
+                                  <span key={tag} className="tech-chip" style={{ background: "var(--color-secondary)", color: "var(--color-on-secondary-container)" }}>
+                                    {normalizeTechName(tag)}
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleTechTag(tag)}
+                                      style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", fontWeight: 700, padding: 0, lineHeight: 1 }}
+                                    >
+                                      x
+                                    </button>
+                                  </span>
+                                ))
+                              ) : (
+                                <span style={{ color: "var(--color-outline)", fontSize: "0.75rem" }}>No tech selected yet.</span>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--color-outline)", fontFamily: "var(--font-label)" }}>
+                              Suggestions
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.4rem" }}>
+                              {techOptions.slice(0, 12).map((tech) => {
+                                const normalized = normalizeTechName(tech.techName);
+                                const selected = formData.techTags.includes(normalized);
+                                return (
+                                  <span
+                                    key={tech.techID}
+                                    className="tech-chip"
+                                    onClick={() => toggleTechTag(tech.techName)}
+                                    style={{
+                                      background: selected ? "var(--color-secondary)" : "var(--color-surface-container-highest)",
+                                      color: selected ? "var(--color-on-secondary-container)" : "var(--color-secondary)",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    {normalized}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -841,6 +986,8 @@ function PostContract() {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
+                        gap: "1rem",
+                        flexWrap: "wrap",
                       }}
                     >
                       <h3
@@ -852,35 +999,97 @@ function PostContract() {
                       >
                         Contract Milestones
                       </h3>
-                      <button
-                        onClick={addMilestone}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.5rem",
-                          background: "transparent",
-                          border: "none",
-                          color: "var(--color-secondary)",
-                          cursor: "pointer",
-                          fontFamily: "var(--font-label)",
-                          fontSize: "0.8rem",
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.1em",
-                        }}
-                      >
-                        <span
-                          className="material-symbols-outlined"
-                          style={{ fontSize: "1.1rem" }}
+                      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => generateMilestones(3)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            background: "transparent",
+                            border: "1px solid var(--color-outline-variant)",
+                            color: "var(--color-on-surface)",
+                            cursor: "pointer",
+                            fontFamily: "var(--font-label)",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.1em",
+                            padding: "0.5rem 0.75rem",
+                            borderRadius: "4px",
+                          }}
                         >
-                          add
-                        </span>
-                        Add Milestone
-                      </button>
+                          Auto-generate
+                        </button>
+                        <button
+                          type="button"
+                          onClick={deferMilestones}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            background: "transparent",
+                            border: "1px solid var(--color-outline-variant)",
+                            color: "var(--color-on-surface)",
+                            cursor: "pointer",
+                            fontFamily: "var(--font-label)",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.1em",
+                            padding: "0.5rem 0.75rem",
+                            borderRadius: "4px",
+                          }}
+                        >
+                          Discuss later
+                        </button>
+                        <button
+                          type="button"
+                          onClick={addMilestone}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            background: "transparent",
+                            border: "none",
+                            color: "var(--color-secondary)",
+                            cursor: "pointer",
+                            fontFamily: "var(--font-label)",
+                            fontSize: "0.8rem",
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.1em",
+                          }}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={{ fontSize: "1.1rem" }}
+                          >
+                            add
+                          </span>
+                          Add Milestone
+                        </button>
+                      </div>
                     </div>
+                    <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", fontSize: "0.75rem", color: "var(--color-outline)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                      <span>Budget: ${budgetValue ? budgetValue.toLocaleString() : "0"}</span>
+                      <span>Planned: ${totalMilestoneAmount.toLocaleString()}</span>
+                      <span>Remaining: ${remainingBudget.toLocaleString()}</span>
+                    </div>
+                    {budgetValue > 0 && totalMilestoneAmount > budgetValue ? (
+                      <p style={{ margin: 0, color: "var(--color-error)", fontSize: "0.85rem" }}>
+                        Milestones exceed the total budget.
+                      </p>
+                    ) : null}
+                    {milestoneDeferred ? (
+                      <p style={{ margin: 0, color: "var(--color-on-surface-variant)", fontSize: "0.85rem" }}>
+                        Milestones are marked as "to be defined." You can edit them later.
+                      </p>
+                    ) : null}
                     {milestones.map((milestone, index) => (
                       <div
-                        key={index}
+                        key={milestone.id || index}
                         style={{
                           background: "var(--color-surface-container)",
                           padding: "1.5rem",
@@ -939,7 +1148,7 @@ function PostContract() {
                               display: "block",
                             }}
                           >
-                            {milestone.amount}
+                            ${Number(milestone.amount || 0).toLocaleString()}
                           </span>
                           <span
                             style={{
@@ -949,8 +1158,26 @@ function PostContract() {
                               letterSpacing: "0.1em",
                             }}
                           >
-                            Due {milestone.due}
+                            Due {milestone.dueDate ? new Date(milestone.dueDate).toLocaleDateString() : "TBD"}
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => removeMilestone(milestone.id)}
+                            style={{
+                              marginTop: "0.75rem",
+                              background: "transparent",
+                              border: "none",
+                              color: "var(--color-error)",
+                              cursor: "pointer",
+                              fontSize: "0.75rem",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.1em",
+                              fontFamily: "var(--font-label)",
+                              fontWeight: 700,
+                            }}
+                          >
+                            Remove
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -964,6 +1191,7 @@ function PostContract() {
                       <input
                         type="number"
                         min="1"
+                        max={remainingBudget || undefined}
                         value={milestoneDraft.amount}
                         onChange={(e) => setMilestoneDraft((prev) => ({ ...prev, amount: e.target.value }))}
                         placeholder="Amount"
@@ -976,6 +1204,9 @@ function PostContract() {
                         style={{ width: "100%", background: "transparent", border: "1px solid var(--color-outline-variant)", color: "var(--color-on-surface)", padding: "0.75rem", borderRadius: "4px" }}
                       />
                     </div>
+                    <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--color-outline)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                      Remaining budget: ${remainingBudget.toLocaleString()}
+                    </p>
                     <div
                       style={{
                         display: "flex",
@@ -1011,7 +1242,7 @@ function PostContract() {
                             height: "100%",
                             background:
                               "linear-gradient(to right, var(--color-secondary), var(--color-primary))",
-                            width: "88%",
+                            width: `${matchStrength}%`,
                           }}
                         />
                       </div>
@@ -1023,7 +1254,7 @@ function PostContract() {
                           color: "var(--color-primary)",
                         }}
                       >
-                        88%
+                        {matchStrength}%
                       </span>
                     </div>
                   </div>
@@ -1109,6 +1340,9 @@ function PostContract() {
                         </div>
                       ))}
                     </div>
+                    <p style={{ margin: 0, color: "var(--color-on-surface-variant)", fontSize: "0.9rem" }}>
+                      Open contracts stay editable until a developer is assigned. After that, edits are locked to protect both sides.
+                    </p>
                   </div>
                 )}
 
@@ -1142,13 +1376,13 @@ function PostContract() {
                     onMouseEnter={(e) => (e.target.style.color = "var(--color-on-surface)")}
                     onMouseLeave={(e) => (e.target.style.color = "var(--color-outline)")}
                   >
-                    {step > 1 ? "← Back" : "Save as Draft"}
+                    {step > 1 ? "← Back" : "Back to Dashboard"}
                   </button>
                   <button
                     onClick={() =>
-                      step < 4 ? setStep(step + 1) : submitContract()
+                      step < 4 ? handleStepChange(step + 1) : submitContract()
                     }
-                    disabled={isProcessing}
+                    disabled={isProcessing || (step < 4 && !canContinue)}
                     className="signature-cta"
                     style={{
                       padding: "1rem 3rem",
@@ -1161,10 +1395,10 @@ function PostContract() {
                       transition: "filter 0.2s",
                       letterSpacing: "-0.02em",
                       borderRadius: "4px",
-                      opacity: isProcessing ? 0.7 : 1
+                      opacity: isProcessing || (step < 4 && !canContinue) ? 0.7 : 1
                     }}
                     onMouseEnter={(e) =>
-                      !isProcessing && (e.target.style.filter = "brightness(1.1)")
+                      !isProcessing && canContinue && (e.target.style.filter = "brightness(1.1)")
                     }
                     onMouseLeave={(e) =>
                       !isProcessing && (e.target.style.filter = "brightness(1)")

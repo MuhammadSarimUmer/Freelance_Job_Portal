@@ -23,6 +23,14 @@ function JobApplyModal({ job, onClose, onSubmitted }) {
     : "Open-ended";
 
   const status = job.status || "DRAFT";
+  const statusLabelMap = {
+    DRAFT: "OPEN",
+    SIGNED: "SIGNED",
+    IN_PROGRESS: "IN PROGRESS",
+    COMPLETED: "COMPLETED",
+    CANCELLED: "CANCELLED",
+  };
+  const statusLabel = statusLabelMap[status] || status;
   const proposalForMe = (job.proposals || []).find(
     (proposal) => proposal.developer?.userID === user?.userID || proposal.developer?.user?.email === user?.email,
   );
@@ -132,7 +140,7 @@ function JobApplyModal({ job, onClose, onSubmitted }) {
           {[
             { label: "Total Budget", value: totalAmount, icon: "payments" },
             { label: "Deadline", value: deadline, icon: "calendar_today" },
-            { label: "Status", value: status, icon: "flag" },
+            { label: "Status", value: statusLabel, icon: "flag" },
           ].map((stat) => (
             <div key={stat.label} style={{ background: "var(--color-surface-container)", padding: "1rem", borderRadius: "6px", textAlign: "center" }}>
               <span className="material-symbols-outlined" style={{ fontSize: "1.25rem", color: "var(--color-primary)", display: "block", marginBottom: "0.5rem" }}>{stat.icon}</span>

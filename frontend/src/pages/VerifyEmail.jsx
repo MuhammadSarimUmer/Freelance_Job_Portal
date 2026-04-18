@@ -8,10 +8,12 @@ function VerifyEmail() {
   const { addToast } = useToast();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
+  const sentFlag = searchParams.get("sent");
   const [email, setEmail] = useState(searchParams.get("email") || "");
-  const [status, setStatus] = useState(token ? "verifying" : "idle");
+  const [status, setStatus] = useState(token ? "verifying" : (sentFlag ? "sent" : "idle"));
   const [message, setMessage] = useState("");
   const [isResending, setIsResending] = useState(false);
+  const showResendForm = !token || status === "error" || status === "sent" || status === "idle";
 
   const getApiErrorMessage = (err, fallbackMessage) => {
     const apiMessage = err?.response?.data?.message;
@@ -54,6 +56,8 @@ function VerifyEmail() {
     try {
       setIsResending(true);
       const { data } = await authService.resendVerification(email);
+      setStatus("sent");
+      setMessage(data?.message || "Email sent. Please verify your inbox.");
       addToast(data?.message || "Verification email sent.", "success");
     } catch (err) {
       addToast(getApiErrorMessage(err, "Unable to send verification email."), "error");
@@ -107,9 +111,24 @@ function VerifyEmail() {
           Confirm your address
         </h1>
         <p style={{ color: "var(--color-secondary)", lineHeight: 1.7 }}>
-          Use the link sent to your inbox to verify your account. If you do not see it,
-          you can request a new email below.
+          {token
+            ? "We are verifying your email now."
+            : "We will send a secure link to your inbox so you can verify your account."}
         </p>
+
+        {status === "sent" && (
+          <div
+            style={{
+              marginTop: "1.5rem",
+              padding: "1rem",
+              borderRadius: "6px",
+              background: "var(--color-surface-container)",
+              color: "var(--color-on-surface)",
+            }}
+          >
+            {message || `Email sent to ${email || "your inbox"}. Please verify yourself.`}
+          </div>
+        )}
 
         {status === "verifying" && (
           <p style={{ marginTop: "1.5rem", color: "var(--color-primary)" }}>
@@ -145,86 +164,113 @@ function VerifyEmail() {
           </div>
         )}
 
-        <div style={{ marginTop: "2rem" }}>
-          <label
-            style={{
-              display: "block",
-              fontSize: "0.65rem",
-              textTransform: "uppercase",
-              letterSpacing: "0.2em",
-              color: "var(--color-secondary)",
-              fontWeight: 700,
-              marginBottom: "0.5rem",
-            }}
-          >
-            Email Address
-          </label>
-          <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="alex@codex.io"
-            style={{
-              width: "100%",
-              background: "transparent",
-              border: "none",
-              borderBottom: "2px solid var(--color-outline-variant-strong)",
-              padding: "0.75rem 0",
-              color: "var(--color-on-surface)",
-              fontSize: "1rem",
-              outline: "none",
-              fontFamily: "var(--font-body)",
-              transition: "border-color 0.3s",
-            }}
-            onFocus={(event) => (event.target.style.borderBottomColor = "var(--color-secondary)")}
-            onBlur={(event) => (event.target.style.borderBottomColor = "var(--color-outline-variant-strong)")}
-          />
-        </div>
+        {showResendForm ? (
+          <>
+            <div style={{ marginTop: "2rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.65rem",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.2em",
+                  color: "var(--color-secondary)",
+                  fontWeight: 700,
+                  marginBottom: "0.5rem",
+                }}
+              >
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="alex@codex.io"
+                style={{
+                  width: "100%",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: "2px solid var(--color-outline-variant-strong)",
+                  padding: "0.75rem 0",
+                  color: "var(--color-on-surface)",
+                  fontSize: "1rem",
+                  outline: "none",
+                  fontFamily: "var(--font-body)",
+                  transition: "border-color 0.3s",
+                }}
+                onFocus={(event) => (event.target.style.borderBottomColor = "var(--color-secondary)")}
+                onBlur={(event) => (event.target.style.borderBottomColor = "var(--color-outline-variant-strong)")}
+              />
+            </div>
 
-        <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
-          <button
-            type="button"
-            onClick={handleResend}
-            disabled={isResending}
-            style={{
-              flex: 1,
-              padding: "1rem",
-              border: "none",
-              borderRadius: "4px",
-              cursor: isResending ? "not-allowed" : "pointer",
-              background: "var(--color-primary)",
-              color: "var(--color-on-primary-container)",
-              fontFamily: "var(--font-headline)",
-              textTransform: "uppercase",
-              letterSpacing: "0.2em",
-              fontSize: "0.75rem",
-              fontWeight: 700,
-              opacity: isResending ? 0.7 : 1,
-            }}
-          >
-            {isResending ? "Sending..." : "Resend Email"}
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate("/auth")}
-            style={{
-              flex: 1,
-              padding: "1rem",
-              border: "1px solid var(--color-outline-variant-strong)",
-              borderRadius: "4px",
-              background: "transparent",
-              color: "var(--color-on-surface)",
-              fontFamily: "var(--font-headline)",
-              textTransform: "uppercase",
-              letterSpacing: "0.2em",
-              fontSize: "0.75rem",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            Back to Login
-          </button>
-        </div>
+            <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={isResending}
+                style={{
+                  flex: 1,
+                  padding: "1rem",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: isResending ? "not-allowed" : "pointer",
+                  background: "var(--color-primary)",
+                  color: "var(--color-on-primary-container)",
+                  fontFamily: "var(--font-headline)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.2em",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  opacity: isResending ? 0.7 : 1,
+                }}
+              >
+                {isResending ? "Sending..." : "Resend Email"}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/auth")}
+                style={{
+                  flex: 1,
+                  padding: "1rem",
+                  border: "1px solid var(--color-outline-variant-strong)",
+                  borderRadius: "4px",
+                  background: "transparent",
+                  color: "var(--color-on-surface)",
+                  fontFamily: "var(--font-headline)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.2em",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Back to Login
+              </button>
+            </div>
+          </>
+        ) : (
+          <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
+            <button
+              type="button"
+              onClick={() => navigate("/auth")}
+              style={{
+                flex: 1,
+                padding: "1rem",
+                border: "1px solid var(--color-outline-variant-strong)",
+                borderRadius: "4px",
+                background: "transparent",
+                color: "var(--color-on-surface)",
+                fontFamily: "var(--font-headline)",
+                textTransform: "uppercase",
+                letterSpacing: "0.2em",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Go to Login
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

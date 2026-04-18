@@ -18,8 +18,19 @@ function LoginSignup() {
     phoneNumber: "",
     profileImage: null,
   });
+  const [profileImagePreviewUrl, setProfileImagePreviewUrl] = useState("");
 
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+
+  useEffect(() => {
+    if (!formData.profileImage) {
+      setProfileImagePreviewUrl("");
+      return;
+    }
+    const url = URL.createObjectURL(formData.profileImage);
+    setProfileImagePreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [formData.profileImage]);
 
   useEffect(() => {
     if (loading || !user?.role) return;
@@ -79,7 +90,7 @@ function LoginSignup() {
         const response = await register(payload, selectedRole.toUpperCase());
         if (response.requiresVerification) {
           addToast("Check your email to verify your account.", "success");
-          navigate(`/verify-email?email=${encodeURIComponent(formData.email)}`);
+          navigate(`/verify-email?email=${encodeURIComponent(formData.email)}&sent=1`);
           return;
         }
 
@@ -96,7 +107,7 @@ function LoginSignup() {
       addToast(message, "error");
 
       if (activeTab === "login" && message.toLowerCase().includes("verify")) {
-        navigate(`/verify-email?email=${encodeURIComponent(formData.email)}`);
+        navigate(`/verify-email?email=${encodeURIComponent(formData.email)}&sent=1`);
       }
     } finally {
       setIsProcessing(false);
@@ -714,6 +725,18 @@ function LoginSignup() {
                             }}
                           />
                         </div>
+                        {profileImagePreviewUrl ? (
+                          <div style={{ marginTop: "0.75rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                            <img
+                              src={profileImagePreviewUrl}
+                              alt="Profile preview"
+                              style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--color-outline-variant)" }}
+                            />
+                            <span style={{ fontSize: "0.85rem", color: "var(--color-on-surface-variant)", fontFamily: "var(--font-body)" }}>
+                              Preview
+                            </span>
+                          </div>
+                        ) : null}
                       </div>
                     )}
                     {activeTab === "login" && (

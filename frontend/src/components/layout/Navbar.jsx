@@ -267,9 +267,6 @@ function Navbar() {
                 </div>
               )}
             </div>
-            <span style={{ color: "var(--color-on-surface-variant)", fontFamily: "var(--font-body)", fontSize: "0.9rem" }}>
-              {user.fullName || user.email}
-            </span>
             <button
               onClick={() => {
                 logout();

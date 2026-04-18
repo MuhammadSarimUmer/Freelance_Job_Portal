@@ -9,6 +9,7 @@ function ContractChat({ contractID, currentUserId }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef(null);
+  const lastMessageAtRef = useRef(null);
 
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
@@ -16,15 +17,31 @@ function ContractChat({ contractID, currentUserId }) {
     }
   };
 
-  const fetchMessages = async (showLoader = false) => {
+  const fetchMessages = async ({ showLoader = false, since = null } = {}) => {
     if (!contractID) return;
     if (showLoader) setIsLoading(true);
 
     try {
-      const res = await messageService.getMessages(contractID);
-      setMessages(res.data?.data || []);
-      if (currentUserId) {
-        messageService.markAsRead(contractID).catch(() => null);
+      const res = await messageService.getMessages(contractID, since ? { since } : {});
+      const incoming = res.data?.data || [];
+
+      if (since) {
+        if (incoming.length > 0) {
+          setMessages((prev) => {
+            const existing = new Set(prev.map((msg) => msg.messageID));
+            const next = incoming.filter((msg) => !existing.has(msg.messageID));
+            return next.length > 0 ? [...prev, ...next] : prev;
+          });
+        }
+      } else {
+        setMessages(incoming);
+      }
+
+      if (incoming.length > 0) {
+        lastMessageAtRef.current = incoming[incoming.length - 1]?.createdAt || lastMessageAtRef.current;
+        if (currentUserId) {
+          messageService.markAsRead(contractID).catch(() => null);
+        }
       }
     } catch (err) {
       addToast(err?.response?.data?.message || "Failed to load messages.", "error");
@@ -34,8 +51,11 @@ function ContractChat({ contractID, currentUserId }) {
   };
 
   useEffect(() => {
-    fetchMessages(true);
-    const interval = setInterval(() => fetchMessages(false), 5000);
+    fetchMessages({ showLoader: true });
+    const interval = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      fetchMessages({ since: lastMessageAtRef.current });
+    }, 5000);
     return () => clearInterval(interval);
   }, [contractID]);
 
@@ -53,7 +73,7 @@ function ContractChat({ contractID, currentUserId }) {
         content: newMessage.trim(),
       });
       setNewMessage("");
-      await fetchMessages(false);
+      await fetchMessages({ since: lastMessageAtRef.current });
     } catch (err) {
       addToast(err?.response?.data?.message || "Failed to send message.", "error");
     } finally {

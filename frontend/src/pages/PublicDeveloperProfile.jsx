@@ -37,6 +37,9 @@ function PublicDeveloperProfile() {
   const displayName = user?.fullName || "Developer";
   const skills = developer.knownTechs || [];
   const availability = developer.availabilityStatus?.replace("_", " ") || "Unknown";
+  const memberSince = user?.registrationDate ? new Date(user.registrationDate).toLocaleDateString() : "N/A";
+  const isImageUrl = (url) => /\.(png|jpe?g|webp|gif|bmp)(\?.*)?$/i.test(url || "");
+  const isPdfUrl = (url) => /\.pdf(\?.*)?$/i.test(url || "");
 
   return (
     <div style={{ backgroundColor: "var(--color-background)", minHeight: "100vh", display: "flex" }}>
@@ -72,6 +75,69 @@ function PublicDeveloperProfile() {
                 Portfolio -&gt;
               </a>
             ) : null}
+            <p style={{ margin: "6px 0 0", color: "var(--color-outline)", fontSize: 12 }}>
+              Member since {memberSince}
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1.5rem", marginBottom: "2rem" }}>
+          <div style={{ background: "var(--color-surface-container)", border: "1px solid var(--color-outline-variant)", borderRadius: 8, padding: "1.25rem" }}>
+            <h3 style={{ margin: 0, fontFamily: "var(--font-headline)", fontSize: "1rem" }}>Portfolio</h3>
+            {developer.portfolioURL ? (
+              <>
+                <a href={developer.portfolioURL} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "var(--color-primary)" }}>
+                  Open portfolio
+                </a>
+                {isImageUrl(developer.portfolioURL) ? (
+                  <img
+                    src={developer.portfolioURL}
+                    alt="Portfolio preview"
+                    style={{ width: "100%", marginTop: "0.75rem", borderRadius: 6, border: "1px solid var(--color-outline-variant)", objectFit: "cover" }}
+                  />
+                ) : (
+                  <p style={{ marginTop: "0.75rem", color: "var(--color-on-surface-variant)", fontSize: 13 }}>
+                    Portfolio link saved.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p style={{ marginTop: "0.75rem", color: "var(--color-on-surface-variant)", fontSize: 13 }}>
+                No portfolio provided.
+              </p>
+            )}
+          </div>
+
+          <div style={{ background: "var(--color-surface-container)", border: "1px solid var(--color-outline-variant)", borderRadius: 8, padding: "1.25rem" }}>
+            <h3 style={{ margin: 0, fontFamily: "var(--font-headline)", fontSize: "1rem" }}>Resume / CV</h3>
+            {developer.cvUrl ? (
+              <>
+                <a href={developer.cvUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "var(--color-primary)" }}>
+                  View CV
+                </a>
+                {isImageUrl(developer.cvUrl) ? (
+                  <img
+                    src={developer.cvUrl}
+                    alt="CV preview"
+                    style={{ width: "100%", marginTop: "0.75rem", borderRadius: 6, border: "1px solid var(--color-outline-variant)", objectFit: "cover" }}
+                  />
+                ) : isPdfUrl(developer.cvUrl) ? (
+                  <iframe
+                    title="CV preview"
+                    src={developer.cvUrl}
+                    style={{ width: "100%", height: "220px", marginTop: "0.75rem", borderRadius: 6, border: "1px solid var(--color-outline-variant)" }}
+                  />
+                ) : (
+                  <p style={{ marginTop: "0.75rem", color: "var(--color-on-surface-variant)", fontSize: 13 }}>
+                    CV file available.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p style={{ marginTop: "0.75rem", color: "var(--color-on-surface-variant)", fontSize: 13 }}>
+                No CV uploaded.
+              </p>
+            )}
           </div>
         </div>
 

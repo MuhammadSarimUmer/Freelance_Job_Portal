@@ -102,11 +102,25 @@ const sendMessage = async (req, res) => {
 const getMessages = async (req, res) => {
     try {
         const { contractID } = req.params;
+        const { since } = req.query;
 
         await assertContractAccess(contractID, req.user.userId, req.user.role);
 
+        const whereClause = { contractID };
+
+        if (since) {
+            const parsedSince = new Date(since);
+            if (Number.isNaN(parsedSince.getTime())) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid since timestamp'
+                });
+            }
+            whereClause.createdAt = { gt: parsedSince };
+        }
+
         const messages = await prisma.message.findMany({
-            where: { contractID },
+            where: whereClause,
             orderBy: { createdAt: 'asc' },
             include: {
                 sender: {

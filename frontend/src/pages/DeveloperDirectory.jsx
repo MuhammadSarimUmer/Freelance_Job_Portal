@@ -18,41 +18,29 @@ function DeveloperDirectory() {
   const [isInviting, setIsInviting] = useState(false);
 
   useEffect(() => {
-    fetchDevelopers();
-    fetchContracts();
+    loadDirectory();
   }, []);
 
-  const refreshData = async () => {
-    await fetchDevelopers();
-    await fetchContracts();
-  };
-
-  const fetchDevelopers = async () => {
+  const loadDirectory = async () => {
     try {
       setIsLoading(true);
-      // Fallback to mock if API is empty
-      const res = await profileService.getAllDevelopers();
-      if (res.data && res.data.data) {
-        setDevelopers(res.data.data);
-      } else {
-        setDevelopers([]);
-      }
-    } catch (err) {
-      console.error(err);
-      addToast(err?.response?.data?.message || "Failed to load developers.", "error");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      const [devRes, contractRes] = await Promise.all([
+        profileService.getAllDevelopers(),
+        contractService.getMyContracts(),
+      ]);
 
-  const fetchContracts = async () => {
-    try {
-      const res = await contractService.getMyContracts();
-      const myContracts = res.data?.data || [];
+      const devs = devRes.data?.data || [];
+      setDevelopers(Array.isArray(devs) ? devs : []);
+
+      const myContracts = contractRes.data?.data || [];
       setContracts(myContracts.filter((contract) => contract.status === "DRAFT"));
     } catch (err) {
       console.error(err);
-      addToast(err?.response?.data?.message || "Failed to load contracts for invitations.", "error");
+      addToast(err?.response?.data?.message || "Failed to load directory data.", "error");
+      setDevelopers([]);
+      setContracts([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -139,6 +127,29 @@ function DeveloperDirectory() {
         .neon-btn:hover {
           opacity: 0.9;
         }
+        .skeleton-card {
+          background: var(--color-surface-container-low);
+          border-radius: 8px;
+          padding: 2rem;
+          border: 1px solid var(--color-outline-variant);
+          display: grid;
+          gap: 0.75rem;
+          animation: shimmer 1.6s infinite;
+          background-image: linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 100%);
+          background-size: 200% 100%;
+        }
+        .skeleton-line {
+          height: 12px;
+          border-radius: 6px;
+          background: rgba(255,255,255,0.08);
+        }
+        .skeleton-line.large { height: 20px; width: 65%; }
+        .skeleton-line.medium { width: 45%; }
+        .skeleton-line.small { width: 30%; }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
       `}</style>
       
       <Sidebar activePage="Browse Developers" role="client" />
@@ -184,13 +195,16 @@ function DeveloperDirectory() {
                   onChange={(e) => setSelectedContractId(e.target.value)}
                   style={{ width: "100%", padding: "0.85rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "6px" }}
                 >
-                  <option value="">Select a draft contract</option>
+                  <option value="">Select an open contract</option>
                   {contracts.map((contract) => (
                     <option key={contract.contractID} value={contract.contractID}>
                       {contract.title}
                     </option>
                   ))}
                 </select>
+                <p style={{ marginTop: "0.5rem", color: "var(--color-outline)", fontSize: "0.75rem" }}>
+                  For active contracts, add team members from the contract workspace.
+                </p>
               </div>
 
               <div>
@@ -218,7 +232,7 @@ function DeveloperDirectory() {
             </div>
             {contracts.length === 0 ? (
               <p style={{ color: "var(--color-outline)", marginTop: "1rem" }}>
-                Create a draft contract first before sending invitations.
+                Open contracts appear here after you create them.
               </p>
             ) : null}
           </div>
@@ -242,7 +256,7 @@ function DeveloperDirectory() {
             />
             <button
               type="button"
-              onClick={refreshData}
+              onClick={loadDirectory}
               disabled={isLoading}
               style={{
                 padding: "0.65rem 1.25rem",
@@ -266,7 +280,20 @@ function DeveloperDirectory() {
 
         {/* GRID */}
         {isLoading ? (
-          <p style={{ color: "var(--color-on-surface-variant)" }}>Scanning the network...</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "2rem" }}>
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <div key={idx} className="skeleton-card">
+                <div className="skeleton-line large" />
+                <div className="skeleton-line medium" />
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <div className="skeleton-line small" />
+                  <div className="skeleton-line small" />
+                  <div className="skeleton-line small" />
+                </div>
+                <div className="skeleton-line" style={{ height: 36, borderRadius: 6 }} />
+              </div>
+            ))}
+          </div>
         ) : filteredDevs.length > 0 ? (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "2rem" }}>
             {filteredDevs.map((dev) => (
@@ -316,6 +343,12 @@ function DeveloperDirectory() {
                       +{(dev.knownTechs || []).length - 3} more
                     </span>
                   )}
+                </div>
+
+                <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.75rem", fontSize: "0.7rem", color: "var(--color-outline)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  {dev.portfolioURL ? <span>Portfolio</span> : null}
+                  {dev.cvUrl ? <span>CV</span> : null}
+                  {!dev.portfolioURL && !dev.cvUrl ? <span>Profile only</span> : null}
                 </div>
 
                 <div style={{ marginTop: "1rem" }}>

@@ -9,6 +9,7 @@ export const developerNav = [
   { icon: "celebration", label: "Milestones", path: "/milestones" },
   { icon: "payments", label: "Earnings", path: "/earnings" },
   { icon: "person", label: "Profile", path: "/developer/profile" },
+  { icon: "settings", label: "Settings", path: "/settings" },
 ];
 
 export const clientNav = [
@@ -18,6 +19,8 @@ export const clientNav = [
   { icon: "people", label: "Developer Directory", path: "/client/directory" },
   { icon: "bug_report", label: "Bug Reports", path: "/bug-reports" },
   { icon: "celebration", label: "Milestones", path: "/milestones" },
+  { icon: "payments", label: "Earnings", path: "/earnings" },
+  { icon: "settings", label: "Settings", path: "/settings" },
 ];
 
 export const currentUser = {
