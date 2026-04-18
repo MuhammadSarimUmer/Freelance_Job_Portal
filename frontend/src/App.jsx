@@ -10,11 +10,13 @@ import ClientDashboard from "./pages/ClientDashboard";
 import DeveloperDirectory from "./pages/DeveloperDirectory";
 import ContractWorkspace from "./pages/ContractWorkspace";
 import MyApplications from "./pages/MyApplications";
+import ApplicationsList from "./pages/ApplicationsList";
 import ApplicationDetail from "./pages/ApplicationDetail";
 import JobListings from "./pages/JobListings";
 import PostContract from "./pages/PostContract";
 import DeveloperProfile from "./pages/DeveloperProfile";
 import ClientProfile from "./pages/ClientProfile";
+import PublicDeveloperProfile from "./pages/PublicDeveloperProfile";
 import ProfileSettings from "./pages/ProfileSettings";
 import BugReports from "./pages/BugReports";
 import Milestones from "./pages/Milestones";
@@ -38,7 +40,9 @@ function App() {
             <Route path="/client/dashboard" element={<RoleRoute allow={["CLIENT"]}><ClientDashboard /></RoleRoute>} />
             <Route path="/client/directory" element={<RoleRoute allow={["CLIENT"]}><DeveloperDirectory /></RoleRoute>} />
             <Route path="/clients/:id" element={<RoleRoute allow={["DEVELOPER", "CLIENT"]}><ClientProfile /></RoleRoute>} />
+            <Route path="/developers/:id" element={<RoleRoute allow={["CLIENT", "DEVELOPER"]}><PublicDeveloperProfile /></RoleRoute>} />
             <Route path="/contracts/:id" element={<RoleRoute allow={["DEVELOPER", "CLIENT"]}><ContractWorkspace /></RoleRoute>} />
+            <Route path="/applications" element={<RoleRoute allow={["CLIENT"]}><ApplicationsList /></RoleRoute>} />
             <Route path="/applications/:id" element={<RoleRoute allow={["CLIENT"]}><ApplicationDetail /></RoleRoute>} />
             <Route path="/developer/applications" element={<RoleRoute allow={["DEVELOPER"]}><MyApplications /></RoleRoute>} />
             <Route path="/jobs" element={<RoleRoute allow={["DEVELOPER"]}><JobListings /></RoleRoute>} />

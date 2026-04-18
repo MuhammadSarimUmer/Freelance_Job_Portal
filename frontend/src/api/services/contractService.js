@@ -28,9 +28,21 @@ export const contractService = {
   addRequiredTech: (contractId, data) =>
     api.post(`/contracts/${contractId}/tech`, data),
 
+  // Remove required tech from contract
+  removeRequiredTech: (contractId, techId) =>
+    api.delete(`/contracts/${contractId}/tech/${techId}`),
+
   // Assign a developer to a contract
   assignDeveloper: (contractId, data) =>
     api.post(`/contracts/${contractId}/team`, data),
+
+  // Update a team member assignment
+  updateTeamMember: (assignmentId, data) =>
+    api.put(`/contracts/team/${assignmentId}`, data),
+
+  // Remove a team member assignment
+  removeTeamMember: (assignmentId) =>
+    api.delete(`/contracts/team/${assignmentId}`),
 
   // Send an invitation to a developer for a contract
   inviteDeveloper: (contractId, data) =>

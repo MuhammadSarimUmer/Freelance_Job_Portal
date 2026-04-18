@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import SectionHeader from "../components/ui/SectionHeader";
 import FormField from "../components/ui/FormField";
@@ -10,7 +11,8 @@ import { uploadService } from "../api/services/uploadService";
 import { normalizeTechName } from "../utils/techName";
 
 function ProfileSettings() {
-  const { user, loading: authLoading, refreshMe } = useAuth();
+  const navigate = useNavigate();
+  const { user, loading: authLoading, refreshMe, logout } = useAuth();
   const roleLower = useMemo(() => user?.role?.toLowerCase() || null, [user?.role]);
   const isDeveloper = roleLower === "developer";
   const isClient = roleLower === "client";
@@ -413,6 +415,20 @@ function ProfileSettings() {
       addToast(err?.response?.data?.message || "Portfolio upload failed.", "error");
     } finally {
       setIsUploadingPortfolio(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      "Are you absolutely sure? This will permanently delete your account and cannot be undone."
+    );
+    if (!confirmed) return;
+    try {
+      await profileService.deleteMyAccount();
+      logout();
+      navigate("/");
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to delete account.", "error");
     }
   };
 
@@ -1043,6 +1059,22 @@ function ProfileSettings() {
                 {authLoading ? (
                   <p style={{ color: "var(--color-secondary)", margin: 0 }}>Loading profile...</p>
                 ) : null}
+
+                <div style={{ marginTop: "4rem", borderTop: "1px solid var(--color-error)", paddingTop: "2rem" }}>
+                  <h3 style={{ fontFamily: "var(--font-headline)", color: "var(--color-error)", marginBottom: "0.5rem" }}>
+                    Danger Zone
+                  </h3>
+                  <p style={{ color: "var(--color-on-surface-variant)", fontSize: 14, marginBottom: "1rem" }}>
+                    Permanently delete your account and all associated data. This cannot be undone.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleDeleteAccount}
+                    style={{ padding: "10px 20px", background: "transparent", border: "1px solid var(--color-error)", color: "var(--color-error)", borderRadius: 6, cursor: "pointer", fontFamily: "var(--font-headline)", fontWeight: 700 }}
+                  >
+                    Delete My Account
+                  </button>
+                </div>
 
               </div>
             </div>

@@ -6,6 +6,7 @@ import DashboardHeader from "../components/ui/DashboardHeader";
 import ManageApplicationsModal from "../components/ui/ManageApplicationsModal";
 import { useAuth } from "../context/AuthContext";
 import { contractService } from "../api/services/contractService";
+import { statsService } from "../api/services/statsService";
 
 function ClientDashboard() {
   const navigate = useNavigate();
@@ -17,21 +18,29 @@ function ClientDashboard() {
   const [isUpdatingContract, setIsUpdatingContract] = useState(false);
   const [stats, setStats] = useState([
     { label: "Active Contracts", value: "0", icon: "assignment" },
-    { label: "Total Spent", value: "$0.00", icon: "payments" },
+    { label: "Total Budget", value: "$0", icon: "payments" },
     { label: "Milestones Pending", value: "0", icon: "flag" },
+    { label: "Bugs Open", value: "0", icon: "bug_report" },
+    { label: "Escrow Held", value: "$0", icon: "lock" },
+    { label: "Escrow Released", value: "$0", icon: "lock_open" },
   ]);
 
   const fetchContracts = async () => {
     try {
-      const { data } = await contractService.getMyContracts();
+      const [{ data }, { data: statsRes }] = await Promise.all([
+        contractService.getMyContracts(),
+        statsService.getDashboardStats(),
+      ]);
       const contracts = data?.data || [];
-      const active = contracts.filter(c => c.status === "IN_PROGRESS").length;
-      const totalSpent = contracts.reduce((acc, c) => acc + Number(c.totalAmount || 0), 0);
+      const s = statsRes?.data;
 
       setStats([
-        { label: "Active Contracts", value: active.toString(), icon: "assignment" },
-        { label: "Total Spent", value: `$${totalSpent.toLocaleString()}`, icon: "payments" },
-        { label: "Contracts Created", value: contracts.length.toString(), icon: "flag" }
+        { label: "Active Contracts", value: String(s?.contracts?.byStatus?.IN_PROGRESS ?? 0), icon: "assignment" },
+        { label: "Total Budget", value: `$${Number(s?.totalAmount ?? 0).toLocaleString()}`, icon: "payments" },
+        { label: "Milestones Pending", value: String(s?.milestones?.byStatus?.PENDING ?? 0), icon: "flag" },
+        { label: "Bugs Open", value: String(s?.bugs?.byStatus?.REPORTED ?? 0), icon: "bug_report" },
+        { label: "Escrow Held", value: `$${Number(s?.escrow?.totalDeposited ?? 0).toLocaleString()}`, icon: "lock" },
+        { label: "Escrow Released", value: `$${Number(s?.escrow?.totalReleased ?? 0).toLocaleString()}`, icon: "lock_open" },
       ]);
 
       setContracts(contracts);

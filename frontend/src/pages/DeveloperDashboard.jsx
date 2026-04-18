@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { contractService } from "../api/services/contractService";
 import { useToast } from "../context/ToastContext";
 import { profileService } from "../api/services/profileService";
+import { statsService } from "../api/services/statsService";
 
 function DeveloperDashboard() {
   const navigate = useNavigate();
@@ -15,9 +16,9 @@ function DeveloperDashboard() {
   
   const [stats, setStats] = useState([
     { label: "Active Projects", value: "0", icon: "terminal" },
-    { label: "Total Earnings", value: "$0.00", icon: "payments" },
-    { label: "Hourly Rate", value: "$0/hr", icon: "timer" },
-    { label: "Success Rate", value: "N/A", icon: "military_tech" },
+    { label: "Completed", value: "0", icon: "check_circle" },
+    { label: "Milestones Active", value: "0", icon: "flag" },
+    { label: "Bugs Assigned", value: "0", icon: "bug_report" },
   ]);
   const [contracts, setContracts] = useState([]);
   const [networkActivity, setNetworkActivity] = useState([]);
@@ -29,24 +30,19 @@ function DeveloperDashboard() {
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
-      const { data: contractData } = await contractService.getMyContracts();
+      const [{ data: contractData }, { data: statsRes }] = await Promise.all([
+        contractService.getMyContracts(),
+        statsService.getDashboardStats(),
+      ]);
       const contracts = contractData?.data || [];
       setContracts(contracts);
-
-      const activeProjects = contracts.filter(c => c.status === "IN_PROGRESS").length;
-      const completedContracts = contracts.filter(c => c.status === "COMPLETED");
-      const totalEarnings = completedContracts.reduce(
-        (acc, c) => acc + Number(c.totalAmount || 0), 0
-      );
-      const successRate = contracts.length > 0
-        ? `${Math.round((completedContracts.length / contracts.length) * 100)}%`
-        : "N/A";
+      const s = statsRes?.data;
 
       setStats([
-        { label: "Active Projects", value: activeProjects.toString(), icon: "terminal" },
-        { label: "Total Earnings", value: `$${totalEarnings.toLocaleString()}`, icon: "payments" },
-        { label: "Hourly Rate", value: `$${user?.developer?.hourlyRate || 0}/hr`, icon: "timer" },
-        { label: "Success Rate", value: successRate, icon: "military_tech" }
+        { label: "Active Projects", value: String(s?.contracts?.byStatus?.IN_PROGRESS ?? 0), icon: "terminal" },
+        { label: "Completed", value: String(s?.contracts?.byStatus?.COMPLETED ?? 0), icon: "check_circle" },
+        { label: "Milestones Active", value: String(s?.milestones?.byStatus?.IN_PROGRESS ?? 0), icon: "flag" },
+        { label: "Bugs Assigned", value: String(s?.bugs?.total ?? 0), icon: "bug_report" },
       ]);
 
       // Build activity feed from assigned contracts

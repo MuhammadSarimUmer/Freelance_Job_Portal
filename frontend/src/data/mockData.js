@@ -14,6 +14,7 @@ export const developerNav = [
 export const clientNav = [
   { icon: "dashboard", label: "Dashboard", path: "/client/dashboard" },
   { icon: "add_circle", label: "Create Contract", path: "/post-contract" },
+  { icon: "apps", label: "Applications", path: "/applications" },
   { icon: "people", label: "Developer Directory", path: "/client/directory" },
   { icon: "bug_report", label: "Bug Reports", path: "/bug-reports" },
   { icon: "celebration", label: "Milestones", path: "/milestones" },

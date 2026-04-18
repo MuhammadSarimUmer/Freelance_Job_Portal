@@ -767,10 +767,28 @@ function PostContract() {
                                 textTransform: "uppercase",
                                 fontFamily: "var(--font-label)",
                                 fontWeight: 700,
-                                borderRadius: "4px"
+                                borderRadius: "4px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
                               }}
                             >
                               {normalizeTechName(tag)}
+                              <button
+                                type="button"
+                                onClick={() => toggleTechTag(tag)}
+                                style={{
+                                  background: "transparent",
+                                  border: "none",
+                                  color: "var(--color-on-secondary-container)",
+                                  cursor: "pointer",
+                                  fontWeight: 700,
+                                  padding: 0,
+                                  lineHeight: 1,
+                                }}
+                              >
+                                x
+                              </button>
                             </span>
                           ))}
                           {techOptions.slice(0, 12).map((tech) => (

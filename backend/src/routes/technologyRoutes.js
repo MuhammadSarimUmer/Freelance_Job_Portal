@@ -9,12 +9,14 @@ const {
 } = require('../validators/technologyValidator');
 
 const validationMiddleware = require('../middlewares/validationMiddleware');
-const { verifyToken, requireDeveloper } = require('../middlewares/authMiddleware');
+const { verifyToken, requireDeveloper, requireRoles } = require('../middlewares/authMiddleware');
 
 router.get('/', tech.getTechnologies);
 
 router.post(
     '/',
+    verifyToken,
+    requireRoles(['CLIENT', 'DEVELOPER']),
     createTechnologyValidator,
     validationMiddleware.validateRequest,
     tech.createTechnology

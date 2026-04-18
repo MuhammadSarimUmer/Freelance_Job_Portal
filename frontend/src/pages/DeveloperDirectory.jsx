@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import { profileService } from "../api/services/profileService";
 import { contractService } from "../api/services/contractService";
 import { useToast } from "../context/ToastContext";
 
 function DeveloperDirectory() {
+  const navigate = useNavigate();
   const { addToast } = useToast();
   const [developers, setDevelopers] = useState([]);
   const [contracts, setContracts] = useState([]);
@@ -268,7 +270,12 @@ function DeveloperDirectory() {
         ) : filteredDevs.length > 0 ? (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "2rem" }}>
             {filteredDevs.map((dev) => (
-              <div key={dev.developerID} className="dev-card-monolith">
+              <div
+                key={dev.developerID}
+                className="dev-card-monolith"
+                onClick={() => navigate(`/developers/${dev.developerID}`)}
+                style={{ cursor: "pointer" }}
+              >
                 
                 {/* Top: Name & Rate */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -312,7 +319,15 @@ function DeveloperDirectory() {
                 </div>
 
                 <div style={{ marginTop: "1rem" }}>
-                  <button className="neon-btn" onClick={() => setSelectedDeveloper(dev)}>Invite to Contract</button>
+                  <button
+                    className="neon-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedDeveloper(dev);
+                    }}
+                  >
+                    Invite to Contract
+                  </button>
                 </div>
               </div>
             ))}

@@ -59,15 +59,16 @@ const forgotPasswordValidator = [
 //         .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
 // ];
 
-// const resetPasswordValidator = [
-//     body('token')
-//         .notEmpty().withMessage('Reset token is required'),
-//     body('newPassword')
-//         .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
-// ];
+const resetPasswordValidator = [
+    body('token')
+        .notEmpty().withMessage('Reset token is required'),
+    body('newPassword')
+        .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
+];
 
 module.exports = {
     registerValidator,
     loginValidator,
-    forgotPasswordValidator
+    forgotPasswordValidator,
+    resetPasswordValidator
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Footer from "../components/layout/Footer";
@@ -11,21 +11,70 @@ function ApplicationDetail() {
   const { addToast } = useToast();
   const [application, setApplication] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    appName: "",
+    appType: "WEB",
+    description: "",
+    currentVersion: "",
+  });
+
+  const fetchApplication = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const res = await applicationService.getApplicationById(id);
+      setApplication(res.data?.data ?? res.data);
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to load application details.", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [addToast, id]);
 
   useEffect(() => {
-    const fetchApplication = async () => {
-      try {
-        setIsLoading(true);
-        const res = await applicationService.getApplicationById(id);
-        setApplication(res.data?.data ?? res.data);
-      } catch (err) {
-        addToast(err?.response?.data?.message || "Failed to load application details.", "error");
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchApplication();
+  }, [fetchApplication]);
+
+  useEffect(() => {
+    setIsEditing(false);
   }, [id]);
+
+  const startEditing = () => {
+    if (!application) return;
+    setEditForm({
+      appName: application.appName || "",
+      appType: application.appType || "WEB",
+      description: application.description || "",
+      currentVersion: application.currentVersion || "",
+    });
+    setIsEditing(true);
+  };
+
+  const handleEditInput = (e) => {
+    const { name, value } = e.target;
+    setEditForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleUpdateApplication = async () => {
+    if (!application?.appID) return;
+    try {
+      setIsSaving(true);
+      await applicationService.updateApplication(application.appID, {
+        appName: editForm.appName,
+        appType: editForm.appType,
+        description: editForm.description,
+        currentVersion: editForm.currentVersion,
+      });
+      addToast("Application updated.", "success");
+      setIsEditing(false);
+      await fetchApplication();
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to update.", "error");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const applicationContracts = application?.contracts || [];
 
@@ -112,6 +161,51 @@ function ApplicationDetail() {
               >
                 Created {application.createdDate ? new Date(application.createdDate).toLocaleDateString() : "N/A"}
               </p>
+              <div style={{ marginTop: "1.5rem", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                {!isEditing ? (
+                  <button
+                    type="button"
+                    onClick={startEditing}
+                    style={{
+                      padding: "0.75rem 1.5rem",
+                      background: "var(--color-secondary)",
+                      color: "var(--color-on-secondary)",
+                      border: "none",
+                      borderRadius: "4px",
+                      fontFamily: "var(--font-headline)",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    Edit Application
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    disabled={isSaving}
+                    style={{
+                      padding: "0.75rem 1.5rem",
+                      background: "transparent",
+                      color: "var(--color-on-surface)",
+                      border: "1px solid var(--color-outline-variant)",
+                      borderRadius: "4px",
+                      fontFamily: "var(--font-headline)",
+                      fontWeight: 700,
+                      cursor: isSaving ? "not-allowed" : "pointer",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      fontSize: "0.75rem",
+                      opacity: isSaving ? 0.6 : 1,
+                    }}
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Main Content Grid */}
@@ -136,18 +230,114 @@ function ApplicationDetail() {
                 >
                   Description
                 </h2>
-                <p
-                  style={{
-                    fontFamily: "var(--font-body)",
-                    fontSize: "0.95rem",
-                    color: "var(--color-on-surface)",
-                    opacity: 0.85,
-                    lineHeight: 1.8,
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {application.description || "No description provided."}
-                </p>
+                {isEditing ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--color-outline)", marginBottom: "0.5rem" }}>
+                        App Name
+                      </label>
+                      <input
+                        name="appName"
+                        aria-label="App Name"
+                        value={editForm.appName}
+                        onChange={handleEditInput}
+                        style={{ width: "100%", padding: "0.75rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "4px" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--color-outline)", marginBottom: "0.5rem" }}>
+                        App Type
+                      </label>
+                      <select
+                        name="appType"
+                        aria-label="App Type"
+                        value={editForm.appType}
+                        onChange={handleEditInput}
+                        style={{ width: "100%", padding: "0.75rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "4px" }}
+                      >
+                        <option value="WEB">Web</option>
+                        <option value="MOBILE">Mobile</option>
+                        <option value="DESKTOP">Desktop</option>
+                        <option value="INTERNAL">Internal</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--color-outline)", marginBottom: "0.5rem" }}>
+                        Current Version
+                      </label>
+                      <input
+                        name="currentVersion"
+                        aria-label="Current Version"
+                        value={editForm.currentVersion}
+                        onChange={handleEditInput}
+                        placeholder="2.1.0"
+                        style={{ width: "100%", padding: "0.75rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "4px" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--color-outline)", marginBottom: "0.5rem" }}>
+                        Description
+                      </label>
+                      <textarea
+                        name="description"
+                        aria-label="Description"
+                        value={editForm.description}
+                        onChange={handleEditInput}
+                        rows={6}
+                        style={{ width: "100%", padding: "0.75rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "4px", resize: "vertical" }}
+                      />
+                    </div>
+                    <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={handleUpdateApplication}
+                        disabled={isSaving}
+                        style={{
+                          padding: "0.75rem 1.5rem",
+                          background: "var(--color-primary)",
+                          color: "var(--color-on-primary)",
+                          border: "none",
+                          borderRadius: "4px",
+                          fontFamily: "var(--font-headline)",
+                          fontWeight: 700,
+                          cursor: isSaving ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {isSaving ? "Saving..." : "Save Changes"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditing(false)}
+                        disabled={isSaving}
+                        style={{
+                          padding: "0.75rem 1.5rem",
+                          background: "transparent",
+                          color: "var(--color-on-surface)",
+                          border: "1px solid var(--color-outline-variant)",
+                          borderRadius: "4px",
+                          fontFamily: "var(--font-headline)",
+                          fontWeight: 700,
+                          cursor: isSaving ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p
+                    style={{
+                      fontFamily: "var(--font-body)",
+                      fontSize: "0.95rem",
+                      color: "var(--color-on-surface)",
+                      opacity: 0.85,
+                      lineHeight: 1.8,
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {application.description || "No description provided."}
+                  </p>
+                )}
               </section>
 
               {/* Right: Metadata */}
