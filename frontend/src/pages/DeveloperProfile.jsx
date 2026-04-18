@@ -1,18 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Footer from "../components/layout/Footer";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { contractService } from "../api/services/contractService";
+import { profileService } from "../api/services/profileService";
+import { reviewService } from "../api/services/reviewService";
 import { normalizeTechName } from "../utils/techName";
 
 function DeveloperProfile() {
   const navigate = useNavigate();
+  const { id } = useParams();
   const { user } = useAuth();
   const { addToast } = useToast();
   const [contracts, setContracts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [profileOverride, setProfileOverride] = useState(null);
+  const [reviewSummary, setReviewSummary] = useState({ averageRating: 0, count: 0 });
 
   useEffect(() => {
     const fetchContracts = async () => {
@@ -32,8 +37,43 @@ function DeveloperProfile() {
     fetchContracts();
   }, [addToast]);
 
-  const developer = user?.developer;
-  const displayName = user?.fullName || "Developer";
+  useEffect(() => {
+    if (!id) return;
+    const fetchProfile = async () => {
+      try {
+        const res = await profileService.getDeveloperById(id);
+        setProfileOverride(res.data?.data || null);
+      } catch (err) {
+        addToast(err?.response?.data?.message || "Failed to load developer profile.", "error");
+        setProfileOverride(null);
+      }
+    };
+    fetchProfile();
+  }, [id, addToast]);
+
+  useEffect(() => {
+    const profileUserId = profileOverride?.userID || user?.userID;
+    if (!profileUserId) return;
+
+    const fetchReviews = async () => {
+      try {
+        const res = await reviewService.getReviewsForUser(profileUserId);
+        const payload = res.data?.data || {};
+        setReviewSummary({
+          averageRating: payload.averageRating || 0,
+          count: payload.count || 0,
+        });
+      } catch (err) {
+        console.error("Failed to load reviews", err);
+      }
+    };
+
+    fetchReviews();
+  }, [profileOverride?.userID, user?.userID]);
+
+  const profileUser = profileOverride?.user || user;
+  const developer = profileOverride || user?.developer;
+  const displayName = profileUser?.fullName || "Developer";
   const initials = displayName
     .split(" ")
     .filter(Boolean)
@@ -54,6 +94,10 @@ function DeveloperProfile() {
     { value: `${developer?.experienceYears ?? 0}+`, label: "Years Exp" },
     { value: `$${developer?.hourlyRate ?? 0}`, label: "Hourly Rate" },
     { value: String(contracts.length), label: "Projects" },
+    {
+      value: reviewSummary.count > 0 ? reviewSummary.averageRating.toFixed(1) : "N/A",
+      label: "Rating",
+    },
     {
       value: contracts.length > 0 ? `${Math.round((completedContracts.length / contracts.length) * 100)}%` : "N/A",
       label: "Success Rate",
@@ -206,9 +250,9 @@ function DeveloperProfile() {
                       overflow: "hidden",
                     }}
                   >
-                    {user?.profileImageUrl ? (
+                    {profileUser?.profileImageUrl ? (
                       <img
-                        src={user.profileImageUrl}
+                        src={profileUser.profileImageUrl}
                         alt={displayName}
                         style={{ width: "100%", height: "100%", objectFit: "cover" }}
                       />

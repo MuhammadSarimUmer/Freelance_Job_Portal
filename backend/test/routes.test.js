@@ -1,6 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
+process.env.NODE_ENV = 'test';
+
 const applicationRoutes = require('../src/routes/applicationRoutes');
 const authRoutes = require('../src/routes/authRoutes');
 const technologyRoutes = require('../src/routes/technologyRoutes');

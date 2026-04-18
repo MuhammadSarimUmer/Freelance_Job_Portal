@@ -76,7 +76,13 @@ function LoginSignup() {
           };
         }
 
-        await register(payload, selectedRole.toUpperCase());
+        const response = await register(payload, selectedRole.toUpperCase());
+        if (response.requiresVerification) {
+          addToast("Check your email to verify your account.", "success");
+          navigate(`/verify-email?email=${encodeURIComponent(formData.email)}`);
+          return;
+        }
+
         addToast("Registration complete. Initialization successful.", "success");
 
         if (selectedRole === "developer") {
@@ -86,10 +92,12 @@ function LoginSignup() {
         }
       }
     } catch (err) {
-      addToast(
-        getApiErrorMessage(err, "Operation failed. Please review your details and try again."),
-        "error",
-      );
+      const message = getApiErrorMessage(err, "Operation failed. Please review your details and try again.");
+      addToast(message, "error");
+
+      if (activeTab === "login" && message.toLowerCase().includes("verify")) {
+        navigate(`/verify-email?email=${encodeURIComponent(formData.email)}`);
+      }
     } finally {
       setIsProcessing(false);
     }

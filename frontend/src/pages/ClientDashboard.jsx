@@ -99,7 +99,7 @@ function ClientDashboard() {
                       endDate: editForm.endDate || null,
                     });
                     setEditingContract(null);
-                    await refreshContracts();
+                    await fetchContracts();
                   } finally {
                     setIsUpdatingContract(false);
                   }
@@ -518,6 +518,17 @@ function ClientDashboard() {
                             style={{ border: "none", background: "var(--color-primary-container)", color: "var(--color-on-primary-container)", borderRadius: "4px", padding: "0.4rem 0.7rem", cursor: "pointer" }}
                           >
                             Publish
+                          </button>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!window.confirm("Delete this draft contract?")) return;
+                              await contractService.deleteContract(contract.contractID);
+                              await fetchContracts();
+                            }}
+                            style={{ border: "1px solid var(--color-error)", background: "transparent", color: "var(--color-error)", borderRadius: "4px", padding: "0.4rem 0.7rem", cursor: "pointer" }}
+                          >
+                            Delete
                           </button>
                         </div>
                       ) : (

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
@@ -6,6 +6,7 @@ import { navbarLinks } from "../../data/mockData";
 import logoDark from "../../assets/logo_dark.png";
 import logoLight from "../../assets/logo_light.png";
 import ThemePullCord from "../ui/ThemePullCord";
+import { notificationService } from "../../api/services/notificationService";
 
 function Navbar() {
   const navigate = useNavigate();
@@ -13,8 +14,73 @@ function Navbar() {
   const { isDark, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const notificationRef = useRef(null);
 
   if (pathname === "/auth") return null;
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await notificationService.getMyNotifications();
+      const payload = res.data?.data || {};
+      setNotifications(payload.notifications || []);
+      setUnreadCount(payload.unreadCount || 0);
+    } catch (err) {
+      console.error("Failed to load notifications", err);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+
+    fetchNotifications();
+  }, [user?.userID]);
+
+  useEffect(() => {
+    if (!notificationsOpen) return;
+
+    const handleClick = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setNotificationsOpen(false);
+      }
+    };
+
+    window.addEventListener("click", handleClick);
+    return () => window.removeEventListener("click", handleClick);
+  }, [notificationsOpen]);
+
+  const handleToggleNotifications = async (event) => {
+    event.stopPropagation();
+
+    if (!user) return;
+
+    const nextOpen = !notificationsOpen;
+    setNotificationsOpen(nextOpen);
+
+    if (nextOpen) {
+      try {
+        const res = await notificationService.getMyNotifications();
+        const payload = res.data?.data || {};
+        const list = payload.notifications || [];
+        setNotifications(list);
+        setUnreadCount(payload.unreadCount || 0);
+
+        if ((payload.unreadCount || 0) > 0) {
+          await notificationService.markAllRead();
+          setUnreadCount(0);
+          setNotifications(list.map((item) => ({ ...item, isRead: true })));
+        }
+      } catch (err) {
+        console.error("Failed to open notifications", err);
+      }
+    }
+  };
 
   // Determine dynamic links based on role
   let links = [...navbarLinks];
@@ -102,6 +168,105 @@ function Navbar() {
         
         {user ? (
           <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <div ref={notificationRef} style={{ position: "relative" }}>
+              <button
+                onClick={handleToggleNotifications}
+                style={{
+                  background: "transparent",
+                  border: "1px solid var(--color-outline-variant)",
+                  color: "var(--color-on-surface)",
+                  padding: "0.4rem 0.6rem",
+                  borderRadius: "999px",
+                  cursor: "pointer",
+                  position: "relative",
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: "1.1rem" }}>
+                  notifications
+                </span>
+                {unreadCount > 0 && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: "-6px",
+                      right: "-4px",
+                      background: "var(--color-primary)",
+                      color: "var(--color-on-primary)",
+                      borderRadius: "999px",
+                      fontSize: "0.65rem",
+                      padding: "2px 6px",
+                      fontFamily: "var(--font-headline)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <div
+                  onClick={(event) => event.stopPropagation()}
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "calc(100% + 12px)",
+                    width: "320px",
+                    background: "var(--color-surface-container-low)",
+                    border: "1px solid var(--color-outline-variant)",
+                    borderRadius: "10px",
+                    padding: "1rem",
+                    boxShadow: "0 16px 40px rgba(0,0,0,0.35)",
+                    zIndex: 10,
+                  }}
+                >
+                  <p
+                    style={{
+                      fontFamily: "var(--font-headline)",
+                      fontWeight: 700,
+                      marginBottom: "0.75rem",
+                    }}
+                  >
+                    Notifications
+                  </p>
+                  {notifications.length === 0 ? (
+                    <p style={{ color: "var(--color-on-surface-variant)" }}>
+                      You are all caught up.
+                    </p>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxHeight: "320px", overflowY: "auto" }}>
+                      {notifications.map((notification) => (
+                        <button
+                          key={notification.notificationID}
+                          onClick={() => {
+                            if (notification.link) {
+                              navigate(notification.link);
+                              setNotificationsOpen(false);
+                            }
+                          }}
+                          style={{
+                            textAlign: "left",
+                            background: notification.isRead ? "transparent" : "var(--color-surface-container-high)",
+                            border: "1px solid var(--color-outline-variant)",
+                            borderRadius: "8px",
+                            padding: "0.75rem",
+                            color: "var(--color-on-surface)",
+                            cursor: notification.link ? "pointer" : "default",
+                          }}
+                        >
+                          <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 700 }}>
+                            {notification.title}
+                          </p>
+                          <p style={{ margin: "0.3rem 0 0", fontSize: "0.75rem", color: "var(--color-on-surface-variant)" }}>
+                            {notification.body}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <span style={{ color: "var(--color-on-surface-variant)", fontFamily: "var(--font-body)", fontSize: "0.9rem" }}>
               {user.fullName || user.email}
             </span>

@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import api from "../api/axiosInstance";
 
 const AuthContext = createContext();
@@ -15,11 +15,67 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem("token") || null);
   const [loading, setLoading] = useState(true);
+  const refreshTimeoutRef = useRef(null);
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch (error) {
+      console.error("Failed to logout", error);
+    }
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+      refreshTimeoutRef.current = null;
+    }
     setToken(null);
     setUser(null);
     localStorage.removeItem("token");
+  };
+
+  const decodeTokenPayload = (jwtToken) => {
+    try {
+      const [, payload] = jwtToken.split(".");
+      if (!payload) return null;
+      return JSON.parse(atob(payload));
+    } catch (error) {
+      console.error("Failed to decode token", error);
+      return null;
+    }
+  };
+
+  const scheduleRefresh = (jwtToken) => {
+    if (!jwtToken) return;
+
+    const payload = decodeTokenPayload(jwtToken);
+    if (!payload?.exp) return;
+
+    const refreshAt = payload.exp * 1000 - 5 * 60 * 1000;
+    const delay = refreshAt - Date.now();
+
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+
+    if (delay <= 0) {
+      refreshTimeoutRef.current = setTimeout(() => handleRefreshToken(), 0);
+      return;
+    }
+
+    refreshTimeoutRef.current = setTimeout(() => handleRefreshToken(), delay);
+  };
+
+  const handleRefreshToken = async () => {
+    try {
+      const { data } = await api.post("/auth/refresh");
+      if (data?.token) {
+        setToken(data.token);
+        localStorage.setItem("token", data.token);
+        scheduleRefresh(data.token);
+      }
+    } catch (error) {
+      console.error("Failed to refresh token", error);
+      logout();
+    }
   };
 
   const refreshMe = async () => {
@@ -44,10 +100,17 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, [token]);
 
+  useEffect(() => {
+    if (token) {
+      scheduleRefresh(token);
+    }
+  }, [token]);
+
   const loginContext = async (email, password) => {
     const { data } = await api.post("/auth/login", { email, password });
     setToken(data.token);
     localStorage.setItem("token", data.token);
+    scheduleRefresh(data.token);
     const userWithRole = { ...data.user, role: getRoleFromUser(data.user) };
     setUser(userWithRole);
     return { ...data, user: userWithRole };
@@ -63,11 +126,19 @@ export const AuthProvider = ({ children }) => {
     }
 
     const { data } = await api.post("/auth/register", formData, { headers });
-    setToken(data.token);
-    localStorage.setItem("token", data.token);
-    // After register, the role is passed explicitly (backend returns user without developer/client populated)
-    const userWithRole = { ...data.user, role: role.toUpperCase() };
-    setUser(userWithRole);
+    const userWithRole = data.user ? { ...data.user, role: role.toUpperCase() } : null;
+
+    if (data.token) {
+      setToken(data.token);
+      localStorage.setItem("token", data.token);
+      scheduleRefresh(data.token);
+      setUser(userWithRole);
+    } else {
+      setToken(null);
+      setUser(null);
+      localStorage.removeItem("token");
+    }
+
     return { ...data, user: userWithRole };
   };
 

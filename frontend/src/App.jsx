@@ -5,6 +5,7 @@ import { ToastProvider } from "./context/ToastContext";
 import Navbar from "./components/layout/Navbar";
 import LandingPage from "./pages/LandingPage";
 import LoginSignup from "./pages/LoginSignup";
+import VerifyEmail from "./pages/VerifyEmail";
 import DeveloperDashboard from "./pages/DeveloperDashboard";
 import ClientDashboard from "./pages/ClientDashboard";
 import DeveloperDirectory from "./pages/DeveloperDirectory";
@@ -35,6 +36,7 @@ function App() {
             <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<LoginSignup />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/auth/forgot-password" element={<ForgotPassword />} />
             <Route path="/developer/dashboard" element={<RoleRoute allow={["DEVELOPER"]}><DeveloperDashboard /></RoleRoute>} />
             <Route path="/client/dashboard" element={<RoleRoute allow={["CLIENT"]}><ClientDashboard /></RoleRoute>} />

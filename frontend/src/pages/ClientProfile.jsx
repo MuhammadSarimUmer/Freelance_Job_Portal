@@ -5,6 +5,7 @@ import Footer from "../components/layout/Footer";
 import { profileService } from "../api/services/profileService";
 import { useToast } from "../context/ToastContext";
 import { useAuth } from "../context/AuthContext";
+import { reviewService } from "../api/services/reviewService";
 
 function ClientProfile() {
   const { id } = useParams();
@@ -13,6 +14,7 @@ function ClientProfile() {
   const { addToast } = useToast();
   const [client, setClient] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [reviewSummary, setReviewSummary] = useState({ averageRating: 0, count: 0 });
 
   useEffect(() => {
     const fetchClient = async () => {
@@ -36,6 +38,25 @@ function ClientProfile() {
     };
     fetchClient();
   }, [id]);
+
+  useEffect(() => {
+    if (!client?.userID) return;
+
+    const fetchReviews = async () => {
+      try {
+        const res = await reviewService.getReviewsForUser(client.userID);
+        const payload = res.data?.data || {};
+        setReviewSummary({
+          averageRating: payload.averageRating || 0,
+          count: payload.count || 0,
+        });
+      } catch (err) {
+        console.error("Failed to load reviews", err);
+      }
+    };
+
+    fetchReviews();
+  }, [client?.userID]);
 
   const layoutStyles = `
     .client-profile-grid {
@@ -221,6 +242,11 @@ function ClientProfile() {
                 <StatCard label="Total Invested" value={`$${(client.totalSpent || 0).toLocaleString()}`} />
                 <StatCard label="Active Contracts" value={client.activeContracts || 0} accent="var(--color-secondary)" />
                 <StatCard label="Completed" value={client.completedContracts || 0} accent="var(--color-tertiary)" />
+                <StatCard
+                  label="Rating"
+                  value={reviewSummary.count > 0 ? reviewSummary.averageRating.toFixed(1) : "N/A"}
+                  accent="var(--color-primary)"
+                />
               </div>
 
               {/* Bio / About */}

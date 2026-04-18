@@ -1,14 +1,18 @@
 import { useState } from "react";
 import { escrowService } from "../../api/services/escrowService";
 
-function EscrowModal({ contractId, onClose }) {
+function EscrowModal({ milestoneId, onClose }) {
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleDeposit = async () => {
     try {
+      if (!milestoneId) return;
       setIsProcessing(true);
-      await escrowService.depositToEscrow({ contractId, amount: Number(amount) });
+      await escrowService.depositToEscrow({
+        milestoneID: milestoneId,
+        depositAmount: Number(amount),
+      });
       onClose();
     } catch (err) {
       console.error(err);

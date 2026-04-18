@@ -31,12 +31,11 @@ function PostContract() {
     budget: "",
     startDate: "",
     endDate: "",
-    contractType: "Web Application",
     techTags: [],
   });
 
   const handleInput = (e) =>
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
   const addMilestone = () => {
     if (!milestoneDraft.title.trim() || !milestoneDraft.amount || !milestoneDraft.due) {
@@ -165,6 +164,13 @@ function PostContract() {
   };
 
   const progress = (step / 4) * 100;
+  const appTypeLabelMap = {
+    WEB: "Web Application",
+    MOBILE: "Mobile App",
+    DESKTOP: "Desktop App",
+    INTERNAL: "Internal Tools",
+  };
+  const appTypeLabel = appTypeLabelMap[formData.appType] || "Web Application";
 
   // Inject scoped styles for responsiveness
   const layoutStyles = `
@@ -1054,7 +1060,7 @@ function PostContract() {
                           label: "App Name",
                           value: formData.appName || "Not specified",
                         },
-                        { label: "App Type", value: formData.contractType },
+                        { label: "App Type", value: appTypeLabel },
                         {
                           label: "Contract Title",
                           value: formData.title || "Not specified",
@@ -1302,7 +1308,7 @@ function PostContract() {
                         color: "var(--color-on-tertiary-fixed)",
                       }}
                     >
-                      {formData.contractType}
+                      {appTypeLabel}
                     </span>
                   </div>
                 </div>

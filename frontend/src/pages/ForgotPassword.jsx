@@ -7,6 +7,8 @@ function ForgotPassword() {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSent, setIsSent] = useState(false);
 
@@ -20,9 +22,36 @@ function ForgotPassword() {
       setIsProcessing(true);
       await authService.forgotPassword(email);
       setIsSent(true);
-      addToast("Recovery link dispatched to your inbox.", "success");
+      addToast("Reset code dispatched to your inbox.", "success");
     } catch (err) {
-      addToast(err?.response?.data?.message || "Failed to send recovery link.", "error");
+      addToast(err?.response?.data?.message || "Failed to send reset code.", "error");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReset = async (e) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      addToast("Enter your email address.", "error");
+      return;
+    }
+    if (!otp.trim()) {
+      addToast("Enter the 6-digit reset code.", "error");
+      return;
+    }
+    if (!newPassword.trim()) {
+      addToast("Enter a new password.", "error");
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+      await authService.resetPassword({ email, otp, newPassword });
+      addToast("Password updated. Please sign in.", "success");
+      navigate("/auth");
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to reset password.", "error");
     } finally {
       setIsProcessing(false);
     }
@@ -95,8 +124,8 @@ function ForgotPassword() {
           }}
         >
           {isSent
-            ? "A recovery link has been dispatched. Check your inbox and follow the instructions to regain access."
-            : "Enter the email address associated with your Codex account. We'll send you a secure recovery link."}
+            ? "Enter the 6-digit code sent to your inbox and choose a new password."
+            : "Enter the email address associated with your Codex account. We'll send you a secure reset code."}
         </p>
 
         {!isSent ? (
@@ -172,30 +201,139 @@ function ForgotPassword() {
                 e.currentTarget.style.transform = "translateY(0)";
               }}
             >
-              {isProcessing ? "Dispatching..." : "Send Recovery Link"}
+              {isProcessing ? "Dispatching..." : "Send Reset Code"}
             </button>
           </form>
         ) : (
-          <button
-            onClick={() => navigate("/auth")}
-            style={{
-              padding: "1.25rem 3rem",
-              background: "transparent",
-              border: "1px solid var(--color-outline-variant)",
-              color: "var(--color-secondary)",
-              fontFamily: "var(--font-headline)",
-              fontWeight: 700,
-              fontSize: "1rem",
-              cursor: "pointer",
-              borderRadius: "4px",
-              textTransform: "uppercase",
-              transition: "background 0.3s",
-            }}
-            onMouseEnter={(e) => (e.target.style.background = "var(--color-surface-container-high)")}
-            onMouseLeave={(e) => (e.target.style.background = "transparent")}
-          >
-            Return to Login
-          </button>
+          <form onSubmit={handleReset}>
+            <div style={{ marginBottom: "1.5rem", textAlign: "left" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.65rem",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.2em",
+                  fontWeight: 700,
+                  color: "var(--color-outline)",
+                  fontFamily: "var(--font-label)",
+                  marginBottom: "0.75rem",
+                }}
+              >
+                Reset Code
+              </label>
+              <input
+                type="text"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                placeholder="6-digit code"
+                style={{
+                  width: "100%",
+                  padding: "1.25rem 1rem",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: "1px solid var(--color-outline-variant)",
+                  color: "var(--color-on-surface)",
+                  fontFamily: "var(--font-body)",
+                  fontSize: "1.1rem",
+                  outline: "none",
+                  transition: "border-color 0.3s",
+                  boxSizing: "border-box",
+                }}
+                onFocus={(e) => (e.target.style.borderBottomColor = "var(--color-primary)")}
+                onBlur={(e) => (e.target.style.borderBottomColor = "var(--color-outline-variant)")}
+              />
+            </div>
+
+            <div style={{ marginBottom: "2rem", textAlign: "left" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.65rem",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.2em",
+                  fontWeight: 700,
+                  color: "var(--color-outline)",
+                  fontFamily: "var(--font-label)",
+                  marginBottom: "0.75rem",
+                }}
+              >
+                New Password
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter a new password"
+                style={{
+                  width: "100%",
+                  padding: "1.25rem 1rem",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: "1px solid var(--color-outline-variant)",
+                  color: "var(--color-on-surface)",
+                  fontFamily: "var(--font-body)",
+                  fontSize: "1.1rem",
+                  outline: "none",
+                  transition: "border-color 0.3s",
+                  boxSizing: "border-box",
+                }}
+                onFocus={(e) => (e.target.style.borderBottomColor = "var(--color-primary)")}
+                onBlur={(e) => (e.target.style.borderBottomColor = "var(--color-outline-variant)")}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isProcessing}
+              className="signature-cta"
+              style={{
+                width: "100%",
+                padding: "1.25rem",
+                background: isProcessing
+                  ? "var(--color-surface-container-high)"
+                  : "linear-gradient(135deg, var(--color-primary), var(--color-primary-container))",
+                color: "var(--color-on-primary)",
+                border: "none",
+                fontFamily: "var(--font-headline)",
+                fontWeight: 700,
+                fontSize: "1rem",
+                cursor: isProcessing ? "not-allowed" : "pointer",
+                borderRadius: "4px",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                transition: "filter 0.3s, transform 0.3s",
+                opacity: isProcessing ? 0.6 : 1,
+              }}
+              onMouseEnter={(e) => {
+                if (!isProcessing) {
+                  e.currentTarget.style.filter = "brightness(1.15)";
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.filter = "brightness(1)";
+                e.currentTarget.style.transform = "translateY(0)";
+              }}
+            >
+              {isProcessing ? "Updating..." : "Reset Password"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSubmit}
+              style={{
+                marginTop: "1rem",
+                background: "transparent",
+                border: "none",
+                color: "var(--color-secondary)",
+                fontFamily: "var(--font-body)",
+                cursor: "pointer",
+                textDecoration: "underline",
+              }}
+            >
+              Resend code
+            </button>
+          </form>
         )}
 
         <button

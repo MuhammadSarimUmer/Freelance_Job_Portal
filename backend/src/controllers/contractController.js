@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const { Prisma } = require('@prisma/client');
+const { createManyNotifications, createNotification } = require('../services/notificationService');
 
 const VALID_PROFICIENCY_LEVEL = [
     'BEGINNER',
@@ -64,7 +65,11 @@ const contractDetailInclude = {
             tech: true
         }
     },
-    milestones: true,
+    milestones: {
+        include: {
+            escrow: true
+        }
+    },
     bugReports: true
 };
 
@@ -80,6 +85,30 @@ const resolveDeveloperProfile = async (userId) => prisma.developer.findUnique({
 
 const canTransitionStatus = (currentStatus, nextStatus) =>
     ALLOWED_STATUS_TRANSITIONS[currentStatus]?.includes(nextStatus);
+
+const notifyContractDevelopers = async (contractID, payload) => {
+    if (!contractID) return;
+
+    const assignments = await prisma.contractAssignment.findMany({
+        where: { contractID },
+        include: { developer: { select: { userID: true } } }
+    });
+
+    const notifications = assignments
+        .map((assignment) => assignment.developer?.userID)
+        .filter(Boolean)
+        .map((userID) => ({
+            userID,
+            type: payload.type,
+            title: payload.title,
+            body: payload.body,
+            link: payload.link
+        }));
+
+    if (notifications.length > 0) {
+        await createManyNotifications(notifications);
+    }
+};
 
 const createContract = async (req, res) => {
     try {
@@ -147,6 +176,9 @@ const getContracts = async (req, res) => {
     try {
         const userId = req.user.userId;
         const role = req.user.role;
+        const page = Math.max(parseInt(req.query.page || '1', 10), 1);
+        const limit = Math.min(Math.max(parseInt(req.query.limit || '20', 10), 1), 100);
+        const skip = (page - 1) * limit;
 
         let whereClause = {};
 
@@ -178,14 +210,26 @@ const getContracts = async (req, res) => {
             };
         }
 
-        const contracts = await prisma.projectContract.findMany({
-            where: whereClause,
-            include: contractDetailInclude
-        });
+        const [contracts, total] = await Promise.all([
+            prisma.projectContract.findMany({
+                where: whereClause,
+                include: contractDetailInclude,
+                skip,
+                take: limit,
+                orderBy: { startDate: 'desc' }
+            }),
+            prisma.projectContract.count({ where: whereClause })
+        ]);
 
         return res.status(200).json({
             success: true,
-            data: contracts
+            data: contracts,
+            meta: {
+                page,
+                limit,
+                total,
+                pages: Math.ceil(total / limit)
+            }
         });
 
     } catch (error) {
@@ -199,19 +243,32 @@ const getContracts = async (req, res) => {
 
 const getOpenContracts = async (req, res) => {
     try {
-        const contracts = await prisma.projectContract.findMany({
-            where: {
-                status: 'DRAFT'
-            },
-            include: contractDetailInclude,
-            orderBy: {
-                startDate: 'asc'
-            }
-        });
+        const page = Math.max(parseInt(req.query.page || '1', 10), 1);
+        const limit = Math.min(Math.max(parseInt(req.query.limit || '20', 10), 1), 100);
+        const skip = (page - 1) * limit;
+
+        const whereClause = { status: 'DRAFT' };
+
+        const [contracts, total] = await Promise.all([
+            prisma.projectContract.findMany({
+                where: whereClause,
+                include: contractDetailInclude,
+                orderBy: { startDate: 'asc' },
+                skip,
+                take: limit
+            }),
+            prisma.projectContract.count({ where: whereClause })
+        ]);
 
         return res.status(200).json({
             success: true,
-            data: contracts
+            data: contracts,
+            meta: {
+                page,
+                limit,
+                total,
+                pages: Math.ceil(total / limit)
+            }
         });
 
     } catch (error) {
@@ -321,6 +378,17 @@ const updateContract = async (req, res) => {
             where: { contractID: id },
             data: updateData
         });
+
+        try {
+            await notifyContractDevelopers(id, {
+                type: 'CONTRACT_STATUS_UPDATED',
+                title: 'Contract status updated',
+                body: `${contract.title || 'Contract'} is now ${status.replace('_', ' ')}.`,
+                link: `/contracts/${id}`
+            });
+        } catch (error) {
+            console.error('Contract status notification error:', error);
+        }
 
         return res.status(200).json({
             success: true,
@@ -554,6 +622,20 @@ const assignDeveloper = async (req, res) => {
                 paymentShare: new Prisma.Decimal(ps)
             }
         });
+
+        try {
+            if (developer.userID) {
+                await createNotification({
+                    userID: developer.userID,
+                    type: 'CONTRACT_ASSIGNED',
+                    title: 'You have been assigned to a contract',
+                    body: `${contract.title || 'A contract'} has been added to your workspace.`,
+                    link: `/contracts/${id}`
+                });
+            }
+        } catch (error) {
+            console.error('Assign developer notification error:', error);
+        }
 
         await prisma.contractProposal.upsert({
             where: {

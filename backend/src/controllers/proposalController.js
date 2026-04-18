@@ -1,5 +1,7 @@
 const { Prisma } = require('@prisma/client');
 const prisma = require('../config/prisma');
+const { sendInvitationEmail, sendProposalSubmittedEmail } = require('../services/emailService');
+const { createNotification } = require('../services/notificationService');
 
 const contractInclude = {
     contract: {
@@ -148,6 +150,39 @@ const createProposal = async (req, res) => {
             include: contractInclude
         });
 
+        const clientContact = proposal.contract?.client?.user;
+        if (proposal.contract?.client?.userID) {
+            try {
+                await createNotification({
+                    userID: proposal.contract.client.userID,
+                    type: 'PROPOSAL_RECEIVED',
+                    title: 'New proposal received',
+                    body: `${proposal.developer?.user?.fullName || 'A developer'} submitted a proposal for ${proposal.contract?.title || 'your contract'}.`,
+                    link: `/contracts/${proposal.contract.contractID}`
+                });
+            } catch (error) {
+                console.error('Proposal notification error:', error);
+            }
+        }
+        if (clientContact?.email) {
+            const contractUrl = process.env.CLIENT_URL
+                ? `${process.env.CLIENT_URL}/contracts/${proposal.contract.contractID}`
+                : null;
+
+            try {
+                await sendProposalSubmittedEmail({
+                    clientEmail: clientContact.email,
+                    clientName: clientContact.fullName,
+                    developerName: proposal.developer?.user?.fullName,
+                    contractTitle: proposal.contract?.title,
+                    message: proposal.message,
+                    contractUrl
+                });
+            } catch (error) {
+                console.error('Proposal notification email error:', error);
+            }
+        }
+
         return res.status(201).json({
             success: true,
             message: 'Proposal submitted successfully',
@@ -282,6 +317,39 @@ const inviteDeveloper = async (req, res) => {
                 include: contractInclude
             });
 
+        const developerContact = proposal.developer?.user;
+        if (proposal.developer?.userID) {
+            try {
+                await createNotification({
+                    userID: proposal.developer.userID,
+                    type: 'INVITATION_RECEIVED',
+                    title: 'You have a new contract invitation',
+                    body: `${proposal.contract?.client?.user?.fullName || 'A client'} invited you to ${proposal.contract?.title || 'a contract'}.`,
+                    link: `/contracts/${proposal.contract.contractID}`
+                });
+            } catch (error) {
+                console.error('Invitation notification error:', error);
+            }
+        }
+        if (developerContact?.email) {
+            const contractUrl = process.env.CLIENT_URL
+                ? `${process.env.CLIENT_URL}/contracts/${proposal.contract.contractID}`
+                : null;
+
+            try {
+                await sendInvitationEmail({
+                    developerEmail: developerContact.email,
+                    developerName: developerContact.fullName,
+                    clientName: proposal.contract?.client?.user?.fullName,
+                    contractTitle: proposal.contract?.title,
+                    message: proposal.message,
+                    contractUrl
+                });
+            } catch (error) {
+                console.error('Invitation email error:', error);
+            }
+        }
+
         return res.status(201).json({
             success: true,
             message: 'Invitation sent successfully',
@@ -349,6 +417,19 @@ const acceptProposal = async (req, res) => {
                     declineReason: null
                 },
                 include: contractInclude
+            });
+
+            await tx.contractProposal.updateMany({
+                where: {
+                    contractID: proposal.contractID,
+                    proposalID: { not: proposalId },
+                    status: 'PENDING'
+                },
+                data: {
+                    status: 'DECLINED',
+                    decidedAt: new Date(),
+                    declineReason: 'Accepted another proposal'
+                }
             });
 
             return { assignment, proposal: acceptedProposal };

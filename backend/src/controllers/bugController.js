@@ -143,6 +143,9 @@ const getBugs = async (req, res) => {
         const userId = req.user.userId;
         const role = req.user.role;
         const { contractID, severity, status } = req.query;
+        const page = Math.max(parseInt(req.query.page || '1', 10), 1);
+        const limit = Math.min(Math.max(parseInt(req.query.limit || '20', 10), 1), 100);
+        const skip = (page - 1) * limit;
 
         let whereClause = {};
 
@@ -176,19 +179,30 @@ const getBugs = async (req, res) => {
             };
         }
 
-        const bugs = await prisma.bugReport.findMany({
-            where: whereClause,
-            include: {
-                contract: {
-                    select: { contractID: true, title: true, status: true }
-                }
-            },
-            orderBy: { createdDate: 'desc' }
-        });
+        const [bugs, total] = await Promise.all([
+            prisma.bugReport.findMany({
+                where: whereClause,
+                include: {
+                    contract: {
+                        select: { contractID: true, title: true, status: true }
+                    }
+                },
+                orderBy: { createdDate: 'desc' },
+                skip,
+                take: limit
+            }),
+            prisma.bugReport.count({ where: whereClause })
+        ]);
 
         return res.status(200).json({
             success: true,
-            data: bugs
+            data: bugs,
+            meta: {
+                page,
+                limit,
+                total,
+                pages: Math.ceil(total / limit)
+            }
         });
 
     } catch (error) {

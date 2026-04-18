@@ -17,6 +17,10 @@ const statsRoutes = require('./routes/statsRoutes');
 const milestoneRoutes = require('./routes/milestoneRoutes');
 const escrowRoutes = require('./routes/escrowRoutes');
 const bugRoutes = require('./routes/bugRoutes');
+const messageRoutes = require('./routes/messageRoutes');
+const reviewRoutes = require('./routes/reviewRoutes');
+const disputeRoutes = require('./routes/disputeRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 const app = express();
 
@@ -53,6 +57,10 @@ app.use('/api/v1/stats', statsRoutes);
 app.use('/api/v1/milestones', milestoneRoutes);
 app.use('/api/v1/escrow', escrowRoutes);
 app.use('/api/v1/bugs', bugRoutes);
+app.use('/api/v1/messages', messageRoutes);
+app.use('/api/v1/reviews', reviewRoutes);
+app.use('/api/v1/disputes', disputeRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 
 app.use((req, res) => {
     res.status(404).json({

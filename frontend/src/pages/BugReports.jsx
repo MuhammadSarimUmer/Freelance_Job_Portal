@@ -7,6 +7,7 @@ import {
 } from "../data/mockData";
 import { useToast } from "../context/ToastContext";
 import { contractService } from "../api/services/contractService";
+import { bugService } from "../api/services/bugService";
 
 function BugReports() {
   const { addToast } = useToast();
@@ -14,6 +15,11 @@ function BugReports() {
   const [isLoading, setIsLoading] = useState(true);
   const [contracts, setContracts] = useState([]);
   const [bugReportsData, setBugReportsData] = useState([]);
+  const [updatingBugId, setUpdatingBugId] = useState(null);
+  const [deletingBugId, setDeletingBugId] = useState(null);
+  const [editingBugId, setEditingBugId] = useState(null);
+  const [editBugForm, setEditBugForm] = useState({ title: "", description: "", severity: "Medium" });
+  const [isSavingBug, setIsSavingBug] = useState(false);
 
   // Form state
   const [showForm, setShowForm] = useState(false);
@@ -28,11 +34,77 @@ function BugReports() {
     setNewBug({ ...newBug, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = () => {
-    // Backend bug CRUD routes are not mounted in this iteration.
-    addToast("Bug creation is not wired yet.", "error");
-    setShowForm(false);
-    setNewBug((prev) => ({ ...prev, title: "", description: "", severity: "Medium" }));
+  const mapSeverityToBackend = (uiSeverity) => {
+    switch (uiSeverity) {
+      case "Critical":
+        return "CRITICAL";
+      case "High":
+        return "MAJOR";
+      case "Medium":
+        return "MINOR";
+      case "Low":
+        return "LOW";
+      default:
+        return "MINOR";
+    }
+  };
+
+  const mapStatusToBackend = (uiStatus) => {
+    switch (uiStatus) {
+      case "In Progress":
+        return "IN_PROGRESS";
+      case "Resolved":
+        return "RESOLVED";
+      case "Open":
+      default:
+        return "REPORTED";
+    }
+  };
+
+  const fetchBugReports = async (contractList) => {
+    const bugsRes = await bugService.getBugs();
+    const bugs = bugsRes.data?.data || [];
+    const contractMap = new Map((contractList || []).map((c) => [c.contractID, c]));
+
+    const mapped = bugs.map((b) => ({
+      bugId: b.bugID || b.id,
+      contractId: b.contractID,
+      contractTitle: contractMap.get(b.contractID)?.title || "",
+      title: b.title,
+      description: b.description,
+      severity: mapSeverity(b.severity),
+      status: mapStatus(b.status),
+      createdDate: formatDate(b.createdDate) || "N/A",
+      resolvedDate: formatDate(b.resolvedDate),
+    }));
+
+    setBugReportsData(mapped);
+  };
+
+  const handleSubmit = async () => {
+    if (!newBug.contractId) {
+      addToast("Select a contract before reporting a bug.", "error");
+      return;
+    }
+    if (!newBug.title.trim()) {
+      addToast("Bug title is required.", "error");
+      return;
+    }
+
+    try {
+      await bugService.createBug({
+        contractID: newBug.contractId,
+        title: newBug.title,
+        description: newBug.description,
+        severity: mapSeverityToBackend(newBug.severity),
+      });
+      addToast("Bug reported successfully.", "success");
+      setShowForm(false);
+      setNewBug({ title: "", description: "", severity: "Medium", contractId: newBug.contractId });
+      await fetchBugReports(contracts);
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to report bug.", "error");
+    }
   };
 
   const formatDate = (value) => {
@@ -78,23 +150,7 @@ function BugReports() {
         const res = await contractService.getMyContracts();
         const cs = res.data?.data || [];
         setContracts(cs);
-
-        const bugs = [];
-        for (const c of cs) {
-          for (const b of c.bugReports || []) {
-            bugs.push({
-              bugId: b.bugID,
-              contractId: b.contractID,
-              title: b.title,
-              description: b.description,
-              severity: mapSeverity(b.severity),
-              status: mapStatus(b.status),
-              createdDate: formatDate(b.createdDate) || "N/A",
-              resolvedDate: formatDate(b.resolvedDate),
-            });
-          }
-        }
-        setBugReportsData(bugs);
+        await fetchBugReports(cs);
 
         if (!newBug.contractId && cs.length > 0) {
           setNewBug((prev) => ({ ...prev, contractId: cs[0].contractID }));
@@ -110,8 +166,69 @@ function BugReports() {
     };
 
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleUpdateStatus = async (bugId, status) => {
+    if (!bugId) return;
+    setUpdatingBugId(bugId);
+    try {
+      await bugService.updateBugStatus(bugId, mapStatusToBackend(status));
+      await fetchBugReports(contracts);
+      addToast("Bug status updated.", "success");
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to update bug status.", "error");
+    } finally {
+      setUpdatingBugId(null);
+    }
+  };
+
+  const handleDelete = async (bugId) => {
+    if (!bugId) return;
+    if (!window.confirm("Delete this bug report?")) return;
+    setDeletingBugId(bugId);
+    try {
+      await bugService.deleteBug(bugId);
+      await fetchBugReports(contracts);
+      addToast("Bug deleted.", "success");
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to delete bug.", "error");
+    } finally {
+      setDeletingBugId(null);
+    }
+  };
+
+  const openEditBug = (bug) => {
+    setEditingBugId(bug.bugId);
+    setEditBugForm({
+      title: bug.title || "",
+      description: bug.description || "",
+      severity: bug.severity || "Medium",
+    });
+  };
+
+  const handleSaveBug = async () => {
+    if (!editingBugId) return;
+    if (!editBugForm.title.trim()) {
+      addToast("Bug title is required.", "error");
+      return;
+    }
+
+    setIsSavingBug(true);
+    try {
+      await bugService.updateBug(editingBugId, {
+        title: editBugForm.title,
+        description: editBugForm.description,
+        severity: mapSeverityToBackend(editBugForm.severity),
+      });
+      addToast("Bug updated.", "success");
+      setEditingBugId(null);
+      await fetchBugReports(contracts);
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to update bug.", "error");
+    } finally {
+      setIsSavingBug(false);
+    }
+  };
 
   const derivedBugReportStats = useMemo(() => {
     const total = bugReportsData.length;
@@ -556,6 +673,188 @@ function BugReports() {
           </section>
         )}
 
+        {editingBugId && (
+          <section
+            className="anim-slide-up"
+            style={{
+              background: "var(--color-surface-container-low)",
+              padding: "2rem",
+              marginBottom: "3rem",
+              position: "relative",
+              zIndex: 1,
+              borderLeft: "4px solid var(--color-secondary)",
+              borderRadius: "8px",
+              borderRight: "1px solid var(--color-outline-variant)",
+              borderTop: "1px solid var(--color-outline-variant)",
+              borderBottom: "1px solid var(--color-outline-variant)",
+            }}
+          >
+            <h3
+              style={{
+                fontFamily: "var(--font-headline)",
+                fontSize: "1.25rem",
+                color: "var(--color-secondary)",
+                marginBottom: "2rem",
+              }}
+            >
+              Edit Bug Report
+            </h3>
+
+            <div style={{ display: "grid", gap: "1.5rem" }}>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.65rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.2em",
+                    color: "var(--color-secondary)",
+                    fontWeight: 700,
+                    marginBottom: "0.75rem",
+                    fontFamily: "var(--font-label)",
+                  }}
+                >
+                  Title
+                </label>
+                <input
+                  value={editBugForm.title}
+                  onChange={(e) => setEditBugForm((prev) => ({ ...prev, title: e.target.value }))}
+                  placeholder="Bug title"
+                  style={{
+                    width: "100%",
+                    background: "transparent",
+                    border: "none",
+                    borderBottom: "2px solid var(--color-outline-variant-strong)",
+                    padding: "0.75rem 0",
+                    color: "var(--color-on-surface)",
+                    fontSize: "1.1rem",
+                    outline: "none",
+                    fontFamily: "var(--font-headline)",
+                  }}
+                />
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.65rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.2em",
+                    color: "var(--color-secondary)",
+                    fontWeight: 700,
+                    marginBottom: "0.75rem",
+                    fontFamily: "var(--font-label)",
+                  }}
+                >
+                  Description
+                </label>
+                <textarea
+                  value={editBugForm.description}
+                  onChange={(e) => setEditBugForm((prev) => ({ ...prev, description: e.target.value }))}
+                  rows={4}
+                  style={{
+                    width: "100%",
+                    background: "transparent",
+                    border: "none",
+                    borderBottom: "2px solid var(--color-outline-variant-strong)",
+                    padding: "0.75rem 0",
+                    color: "var(--color-on-surface)",
+                    fontSize: "0.95rem",
+                    outline: "none",
+                    fontFamily: "var(--font-body)",
+                    lineHeight: 1.7,
+                    resize: "none",
+                  }}
+                />
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.65rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.2em",
+                    color: "var(--color-secondary)",
+                    fontWeight: 700,
+                    marginBottom: "0.75rem",
+                    fontFamily: "var(--font-label)",
+                  }}
+                >
+                  Severity
+                </label>
+                <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                  {["Critical", "High", "Medium", "Low"].map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setEditBugForm((prev) => ({ ...prev, severity: level }))}
+                      style={{
+                        padding: "6px 16px",
+                        background:
+                          editBugForm.severity === level
+                            ? bugSeverityColors[level].bg
+                            : "var(--color-surface-container)",
+                        border: `1px solid ${
+                          editBugForm.severity === level
+                            ? bugSeverityColors[level].color
+                            : "var(--color-outline-variant-strong)"
+                        }`,
+                        color:
+                          editBugForm.severity === level
+                            ? bugSeverityColors[level].color
+                            : "var(--color-outline)",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.1em",
+                        cursor: "pointer",
+                        fontFamily: "var(--font-headline)",
+                        transition: "all 0.2s",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "1rem", marginTop: "2rem" }}>
+              <button
+                type="button"
+                onClick={() => setEditingBugId(null)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--color-secondary)",
+                  cursor: "pointer",
+                  fontFamily: "var(--font-headline)",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveBug}
+                disabled={isSavingBug}
+                className="signature-cta"
+                style={{
+                  padding: "0.75rem 2rem",
+                  color: "var(--color-on-primary-container)",
+                  border: "none",
+                  cursor: isSavingBug ? "not-allowed" : "pointer",
+                  borderRadius: "4px",
+                }}
+              >
+                {isSavingBug ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </section>
+        )}
+
         {/* BUG REPORTS TABLE */}
         <section className="anim-fade-in-up anim-delay-2" style={{ position: "relative", zIndex: 1 }}>
           <div
@@ -596,14 +895,15 @@ function BugReports() {
                     borderBottom: "1px solid var(--color-outline-variant-strong)",
                   }}
                 >
-                  {[
-                    "Bug ID",
-                    "Contract",
-                    "Title",
-                    "Severity",
-                    "Status",
-                    "Reported",
-                  ].map((col) => (
+                    {[
+                      "Bug ID",
+                      "Contract",
+                      "Title",
+                      "Severity",
+                      "Status",
+                      "Reported",
+                      "Actions",
+                    ].map((col) => (
                     <th
                       key={col}
                       style={{
@@ -666,6 +966,18 @@ function BugReports() {
                       >
                         {bug.contractId}
                       </span>
+                      {bug.contractTitle ? (
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "0.7rem",
+                            color: "var(--color-outline)",
+                            fontFamily: "var(--font-body)",
+                          }}
+                        >
+                          {bug.contractTitle}
+                        </span>
+                      ) : null}
                     </td>
 
                     {/* Title + Description */}
@@ -719,24 +1031,29 @@ function BugReports() {
                       </span>
                     </td>
 
-                    {/* Status Badge */}
+                    {/* Status */}
                     <td style={{ padding: "1.25rem 1.5rem" }}>
-                      <span
+                      <select
+                        value={bug.status}
+                        onChange={(e) => handleUpdateStatus(bug.bugId, e.target.value)}
+                        disabled={updatingBugId === bug.bugId}
                         style={{
-                          display: "inline-block",
-                          padding: "3px 12px",
                           background: bugStatusColors[bug.status].bg,
                           color: bugStatusColors[bug.status].color,
+                          border: "1px solid var(--color-outline-variant-strong)",
+                          borderRadius: "4px",
                           fontSize: "0.65rem",
                           fontWeight: 700,
                           textTransform: "uppercase",
                           letterSpacing: "0.1em",
                           fontFamily: "var(--font-label)",
-                          borderRadius: "4px"
+                          padding: "3px 12px",
                         }}
                       >
-                        {bug.status}
-                      </span>
+                        <option value="Open">Open</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Resolved">Resolved</option>
+                      </select>
                     </td>
 
                     {/* Date */}
@@ -763,6 +1080,39 @@ function BugReports() {
                           ✓ {bug.resolvedDate}
                         </span>
                       )}
+                    </td>
+
+                    {/* Actions */}
+                    <td style={{ padding: "1.25rem 1.5rem", display: "flex", gap: "0.75rem" }}>
+                      <button
+                        type="button"
+                        onClick={() => openEditBug(bug)}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "var(--color-secondary)",
+                          cursor: "pointer",
+                          fontFamily: "var(--font-headline)",
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(bug.bugId)}
+                        disabled={deletingBugId === bug.bugId}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "var(--color-error)",
+                          cursor: deletingBugId === bug.bugId ? "not-allowed" : "pointer",
+                          fontFamily: "var(--font-headline)",
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        {deletingBugId === bug.bugId ? "Deleting..." : "Delete"}
+                      </button>
                     </td>
                   </tr>
                 ))}

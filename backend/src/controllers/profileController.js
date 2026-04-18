@@ -6,6 +6,9 @@ const VALID_AVAILABILITY_STATUSES = ['AVAILABLE', 'BUSY', 'UNAVAILABLE'];
 const getDevelopers = async (req, res) => {
     try {
         const { status, minExperience } = req.query;
+        const page = Math.max(parseInt(req.query.page || '1', 10), 1);
+        const limit = Math.min(Math.max(parseInt(req.query.limit || '20', 10), 1), 100);
+        const skip = (page - 1) * limit;
         const whereClause = {};
 
         if (status) {
@@ -23,15 +26,29 @@ const getDevelopers = async (req, res) => {
             whereClause.experienceYears = { gte: parsed };
         }
 
-        const developers = await prisma.developer.findMany({
-            where: whereClause,
-            include: {
-                user: { select: { fullName: true, email: true, profileImageUrl: true } },
-                knownTechs: { include: { tech: true } }
+        const [developers, total] = await Promise.all([
+            prisma.developer.findMany({
+                where: whereClause,
+                include: {
+                    user: { select: { fullName: true, email: true, profileImageUrl: true } },
+                    knownTechs: { include: { tech: true } }
+                },
+                skip,
+                take: limit
+            }),
+            prisma.developer.count({ where: whereClause })
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: developers,
+            meta: {
+                page,
+                limit,
+                total,
+                pages: Math.ceil(total / limit)
             }
         });
-
-        res.status(200).json({ success: true, data: developers });
     } catch (error) {
         console.error('GetDevelopers error:', error);
         res.status(500).json({ success: false, message: 'Server error' });

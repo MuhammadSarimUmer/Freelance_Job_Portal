@@ -15,9 +15,8 @@ router.post('/logout', authMiddleware.verifyToken, authController.logout);
 router.post('/forgot-password', authValidator.forgotPasswordValidator, validationMiddleware.validateRequest, authController.forgotPassword);
 router.post('/reset-password', authValidator.resetPasswordValidator, validationMiddleware.validateRequest, authController.resetPassword);
 
-// TODO-DEADLINE: Email verification + OTP routes (DO NOT REMOVE)
-// router.post('/resend-verification', authValidator.resendVerificationValidator, validationMiddleware.validateRequest, authController.resendVerification);
-// router.get('/verify-email', authController.verifyEmail);
-// router.post('/verify-email', authValidator.verifyEmailValidator, validationMiddleware.validateRequest, authController.verifyEmail);
+router.post('/resend-verification', authValidator.resendVerificationValidator, validationMiddleware.validateRequest, authController.resendVerification);
+router.get('/verify-email', authController.verifyEmail);
+router.post('/verify-email', authValidator.verifyEmailValidator, validationMiddleware.validateRequest, authController.verifyEmail);
 
 module.exports = router;

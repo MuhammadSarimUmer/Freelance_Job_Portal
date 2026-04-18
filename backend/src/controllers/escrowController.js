@@ -1,13 +1,14 @@
 const prisma = require('../config/prisma');
 const { Prisma } = require('@prisma/client');
 const crypto = require('crypto');
+const { createManyNotifications } = require('../services/notificationService');
 
 // Helper: verify milestone ownership through contract → client chain
 const verifyMilestoneOwnershipForEscrow = async (milestoneID, userId) => {
     const milestone = await prisma.milestone.findUnique({
         where: { milestoneID },
         include: {
-            contract: { select: { clientID: true } },
+            contract: { select: { clientID: true, contractID: true } },
             escrow: true
         }
     });
@@ -24,6 +25,32 @@ const verifyMilestoneOwnershipForEscrow = async (milestoneID, userId) => {
     }
 
     return { milestone, client };
+};
+
+const notifyContractDevelopers = async (contractID, payload) => {
+    if (!contractID) return;
+
+    const assignments = await prisma.contractAssignment.findMany({
+        where: { contractID },
+        include: {
+            developer: { select: { userID: true } }
+        }
+    });
+
+    const notifications = assignments
+        .map((assignment) => assignment.developer?.userID)
+        .filter(Boolean)
+        .map((userID) => ({
+            userID,
+            type: payload.type,
+            title: payload.title,
+            body: payload.body,
+            link: payload.link
+        }));
+
+    if (notifications.length > 0) {
+        await createManyNotifications(notifications);
+    }
 };
 
 const depositEscrow = async (req, res) => {
@@ -64,6 +91,19 @@ const depositEscrow = async (req, res) => {
                 transactionReference
             }
         });
+
+        try {
+            await notifyContractDevelopers(ownership.milestone.contract?.contractID, {
+                type: 'ESCROW_DEPOSITED',
+                title: 'Escrow funded',
+                body: `Escrow funded for milestone ${ownership.milestone.title || 'milestone'}.`,
+                link: ownership.milestone.contract?.contractID
+                    ? `/contracts/${ownership.milestone.contract.contractID}`
+                    : null
+            });
+        } catch (error) {
+            console.error('Escrow deposit notification error:', error);
+        }
 
         return res.status(201).json({
             success: true,
@@ -180,6 +220,13 @@ const releaseEscrow = async (req, res) => {
             });
         }
 
+        if (escrow.milestone.status !== 'COMPLETED') {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot release escrow — milestone is not yet marked COMPLETED.'
+            });
+        }
+
         const updated = await prisma.paymentEscrow.update({
             where: { escrowID },
             data: {
@@ -187,6 +234,19 @@ const releaseEscrow = async (req, res) => {
                 releaseDate: new Date()
             }
         });
+
+        try {
+            await notifyContractDevelopers(escrow.milestone.contract?.contractID, {
+                type: 'ESCROW_RELEASED',
+                title: 'Escrow released',
+                body: `Payment released for milestone ${escrow.milestone.title || 'milestone'}.`,
+                link: escrow.milestone.contract?.contractID
+                    ? `/contracts/${escrow.milestone.contract.contractID}`
+                    : null
+            });
+        } catch (error) {
+            console.error('Escrow release notification error:', error);
+        }
 
         return res.status(200).json({
             success: true,

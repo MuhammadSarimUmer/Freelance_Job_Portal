@@ -79,6 +79,13 @@ enum BugStatus {
   CLOSED
 }
 
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+}
+
 model User {
   userID           String        @id @default(uuid())
   fullName         String
@@ -88,6 +95,16 @@ model User {
   profileImageUrl  String?
   registrationDate DateTime      @default(now())
   accountStatus    AccountStatus @default(ACTIVE)
+  emailVerified    Boolean       @default(false)
+  emailVerifiedAt  DateTime?
+  emailVerificationToken        String?
+  emailVerificationTokenExpires DateTime?
+  passwordResetOtps PasswordResetOtp[]
+  messagesSent     Message[]
+  notifications    Notification[]
+  disputesRaised   Dispute[]
+  reviewsGiven     Review[]      @relation("ReviewsGiven")
+  reviewsReceived  Review[]      @relation("ReviewsReceived")
   developer        Developer?
   client           Client?
 }
@@ -101,11 +118,7 @@ model BlacklistedToken {
   @@index([expiresAt])
 }
 
-// TODO-DEADLINE: Email verification + OTP schema additions (DO NOT REMOVE)
-// emailVerified    Boolean       @default(false)
-// emailVerifiedAt  DateTime?
-// emailVerificationToken        String?
-// emailVerificationTokenExpires DateTime?
+// TODO-DEADLINE: OTP schema additions (DO NOT REMOVE)
 // passwordResetOtps PasswordResetOtp[]
 //
 // model PasswordResetOtp {
@@ -193,6 +206,9 @@ model ProjectContract {
   technologies ContractTechnology[]
   milestones   Milestone[]
   bugReports   BugReport[]
+  messages     Message[]
+  review       Review?
+  disputes     Dispute[]
 }
 
 model ContractProposal {
@@ -272,4 +288,80 @@ model BugReport {
   createdDate  DateTime        @default(now())
   resolvedDate DateTime?
   contract     ProjectContract @relation(fields: [contractID], references: [contractID], onDelete: Cascade)
+}
+
+model Message {
+  messageID  String   @id @default(uuid())
+  contractID String
+  senderID   String
+  content    String   @db.Text
+  createdAt  DateTime @default(now())
+  isRead     Boolean  @default(false)
+
+  contract   ProjectContract @relation(fields: [contractID], references: [contractID], onDelete: Cascade)
+  sender     User            @relation(fields: [senderID], references: [userID], onDelete: Cascade)
+
+  @@index([contractID])
+  @@index([senderID])
+}
+
+model Review {
+  reviewID   String   @id @default(uuid())
+  contractID String   @unique
+  reviewerID String
+  revieweeID String
+  rating     Int
+  comment    String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  contract  ProjectContract @relation(fields: [contractID], references: [contractID], onDelete: Cascade)
+  reviewer  User            @relation("ReviewsGiven", fields: [reviewerID], references: [userID], onDelete: Cascade)
+  reviewee  User            @relation("ReviewsReceived", fields: [revieweeID], references: [userID], onDelete: Cascade)
+
+  @@index([revieweeID])
+}
+
+model Dispute {
+  disputeID  String        @id @default(uuid())
+  contractID String
+  raisedByID String
+  reason     String        @db.Text
+  status     DisputeStatus @default(OPEN)
+  resolution String?       @db.Text
+  createdAt  DateTime      @default(now())
+  resolvedAt DateTime?
+
+  contract  ProjectContract @relation(fields: [contractID], references: [contractID], onDelete: Cascade)
+  raisedBy  User            @relation(fields: [raisedByID], references: [userID], onDelete: Cascade)
+
+  @@index([contractID])
+  @@index([raisedByID])
+}
+
+model Notification {
+  notificationID String   @id @default(uuid())
+  userID         String
+  type           String
+  title          String
+  body           String
+  isRead         Boolean  @default(false)
+  link           String?
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userID], references: [userID], onDelete: Cascade)
+
+  @@index([userID, isRead])
+}
+
+model PasswordResetOtp {
+  otpID     String   @id @default(uuid())
+  userID    String
+  otpHash   String
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userID], references: [userID], onDelete: Cascade)
+
+  @@index([userID])
 }

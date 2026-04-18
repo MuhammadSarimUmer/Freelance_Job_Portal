@@ -1,12 +1,13 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
+process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 
 const authController = require('../src/controllers/authController');
 
-test('resetPassword rejects invalid token', async () => {
-    const req = { body: { token: 'not-a-valid-token', newPassword: 'NewPass123' } };
+test('resetPassword rejects missing otp fields', async () => {
+    const req = { body: { email: '', otp: '', newPassword: '' } };
     let statusCode = 0;
     let payload;
 
@@ -25,5 +26,5 @@ test('resetPassword rejects invalid token', async () => {
 
     assert.equal(statusCode, 400);
     assert.equal(payload.success, false);
-    assert.equal(payload.message, 'Invalid or expired reset token');
+    assert.equal(payload.message, 'Email, OTP, and new password are required');
 });
