@@ -44,6 +44,10 @@ export const contractService = {
   removeTeamMember: (assignmentId) =>
     api.delete(`/contracts/team/${assignmentId}`),
 
+  // Request to leave a contract (DEVELOPER)
+  requestTeamMemberLeave: (assignmentId) =>
+    api.post(`/contracts/team/${assignmentId}/leave-request`),
+
   // Send an invitation to a developer for a contract
   inviteDeveloper: (contractId, data) =>
     api.post(`/contracts/${contractId}/invitations`, data),

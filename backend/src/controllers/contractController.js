@@ -9,12 +9,14 @@ const VALID_PROFICIENCY_LEVEL = [
 ];
 
 const ALLOWED_STATUS_TRANSITIONS = {
-    DRAFT: ['SIGNED', 'CANCELLED'],
-    SIGNED: ['IN_PROGRESS', 'CANCELLED'],
+    DRAFT: ['SIGNED', 'IN_PROGRESS', 'CANCELLED'],
+    SIGNED: ['IN_PROGRESS', 'COMPLETED', 'CANCELLED'],
     IN_PROGRESS: ['COMPLETED', 'CANCELLED'],
     COMPLETED: [],
     CANCELLED: []
 };
+
+const OPEN_CONTRACT_STATUSES = ['DRAFT', 'SIGNED'];
 
 const contractDetailInclude = {
     client: {
@@ -67,7 +69,22 @@ const contractDetailInclude = {
     },
     milestones: {
         include: {
-            escrow: true
+            escrow: true,
+            assignments: {
+                include: {
+                    developer: {
+                        include: {
+                            user: {
+                                select: {
+                                    fullName: true,
+                                    email: true,
+                                    profileImageUrl: true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     },
     bugReports: true
@@ -247,7 +264,7 @@ const getOpenContracts = async (req, res) => {
         const limit = Math.min(Math.max(parseInt(req.query.limit || '20', 10), 1), 100);
         const skip = (page - 1) * limit;
 
-        const whereClause = { status: 'DRAFT' };
+        const whereClause = { status: { in: ['DRAFT', 'SIGNED'] } };
 
         const [contracts, total] = await Promise.all([
             prisma.projectContract.findMany({
@@ -422,6 +439,64 @@ const updateContractStatus = async (req, res) => {
             });
         }
 
+        if (['IN_PROGRESS', 'COMPLETED'].includes(status)) {
+            const assignments = await prisma.contractAssignment.findMany({
+                where: { contractID: id },
+                select: { assignmentID: true, paymentShare: true }
+            });
+
+            if (assignments.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Assign at least one team member before publishing the contract'
+                });
+            }
+
+            if (assignments.length === 1) {
+                const currentShare = Number(assignments[0].paymentShare ?? 0);
+                if (currentShare !== 100) {
+                    await prisma.contractAssignment.update({
+                        where: { assignmentID: assignments[0].assignmentID },
+                        data: { paymentShare: new Prisma.Decimal(100) }
+                    });
+                }
+            } else {
+                const shares = assignments.map((assignment) => Number(assignment.paymentShare ?? 0));
+                const hasInvalidShare = shares.some((share) => Number.isNaN(share) || share <= 0);
+                const totalShare = shares.reduce((sum, share) => sum + share, 0);
+
+                if (hasInvalidShare) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Set a valid payment share for every team member before publishing'
+                    });
+                }
+
+                if (Math.abs(totalShare - 100) > 0.01) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Payment shares must total 100% before publishing'
+                    });
+                }
+            }
+        }
+
+        if (status === 'COMPLETED') {
+            const milestones = await prisma.milestone.findMany({
+                where: { contractID: id },
+                select: { status: true }
+            });
+            const hasMilestones = milestones.length > 0;
+            const allCompleted = milestones.every((milestone) => milestone.status === 'COMPLETED');
+
+            if (hasMilestones && !allCompleted) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'All milestones must be completed before closing the contract'
+                });
+            }
+        }
+
         const updateData = { status };
         if (status === 'SIGNED' && !contract.signedDate) {
             updateData.signedDate = new Date();
@@ -576,6 +651,13 @@ const assignDeveloper = async (req, res) => {
             });
         }
 
+        if (!OPEN_CONTRACT_STATUSES.includes(contract.status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Contract is not open for new team members'
+            });
+        }
+
         const developer = await prisma.developer.findUnique({
             where: { developerID }
         });
@@ -594,6 +676,13 @@ const assignDeveloper = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'Invalid numeric values'
+            });
+        }
+
+        if (ps < 0 || ps > 100) {
+            return res.status(400).json({
+                success: false,
+                message: 'Payment share must be between 0 and 100'
             });
         }
 
@@ -693,7 +782,7 @@ const updateTeamMember = async (req, res) => {
         const assignment = await prisma.contractAssignment.findUnique({
             where: { assignmentID: id },
             include: {
-                contract: { select: { clientID: true } }
+                contract: { select: { clientID: true, status: true } }
             }
         });
 
@@ -723,11 +812,24 @@ const updateTeamMember = async (req, res) => {
         for (let key of allowedFields) {
             if (req.body[key] !== undefined) {
                 if (key === 'contributionPercentage' || key === 'paymentShare') {
+                    if (key === 'paymentShare' && !OPEN_CONTRACT_STATUSES.includes(assignment.contract.status)) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Payment shares can only be adjusted before publishing'
+                        });
+                    }
+
                     const val = Number(req.body[key]);
                     if (isNaN(val)) {
                         return res.status(400).json({
                             success: false,
                             message: `Invalid numeric value for ${key}`
+                        });
+                    }
+                    if (key === 'paymentShare' && (val < 0 || val > 100)) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Payment share must be between 0 and 100'
                         });
                     }
                     updateData[key] = new Prisma.Decimal(val);
@@ -769,7 +871,7 @@ const removeTeamMember = async (req, res) => {
         const assignment = await prisma.contractAssignment.findUnique({
             where: { assignmentID: id },
             include: {
-                contract: { select: { clientID: true } }
+                contract: { select: { clientID: true, status: true } }
             }
         });
 
@@ -793,6 +895,15 @@ const removeTeamMember = async (req, res) => {
             });
         }
 
+        if (!OPEN_CONTRACT_STATUSES.includes(assignment.contract.status)) {
+            if (!assignment.leaveRequestedAt || assignment.leaveRequestedBy !== 'DEVELOPER') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Closed contracts require developer consent before removal'
+                });
+            }
+        }
+
         await prisma.contractAssignment.delete({
             where: { assignmentID: id }
         });
@@ -804,6 +915,73 @@ const removeTeamMember = async (req, res) => {
 
     } catch (error) {
         console.error('RemoveTeamMember error:', error);
+        return res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+const requestTeamMemberLeave = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.userId;
+
+        const developer = await resolveDeveloperProfile(userId);
+        if (!developer) {
+            return res.status(404).json({
+                success: false,
+                message: 'Developer profile not found'
+            });
+        }
+
+        const assignment = await prisma.contractAssignment.findUnique({
+            where: { assignmentID: id },
+            include: {
+                contract: { select: { status: true } }
+            }
+        });
+
+        if (!assignment) {
+            return res.status(404).json({
+                success: false,
+                message: 'Assignment not found'
+            });
+        }
+
+        if (assignment.developerID !== developer.developerID) {
+            return res.status(403).json({
+                success: false,
+                message: 'Forbidden - You are not assigned to this contract'
+            });
+        }
+
+        if (OPEN_CONTRACT_STATUSES.includes(assignment.contract.status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Leave requests are only required after the contract is published'
+            });
+        }
+
+        if (assignment.leaveRequestedAt) {
+            return res.status(409).json({
+                success: false,
+                message: 'Leave request already submitted'
+            });
+        }
+
+        const updated = await prisma.contractAssignment.update({
+            where: { assignmentID: id },
+            data: {
+                leaveRequestedAt: new Date(),
+                leaveRequestedBy: 'DEVELOPER'
+            }
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Leave request submitted successfully',
+            data: updated
+        });
+    } catch (error) {
+        console.error('RequestTeamMemberLeave error:', error);
         return res.status(500).json({ success: false, message: 'Server error' });
     }
 };
@@ -858,5 +1036,6 @@ module.exports = {
     assignDeveloper,
     updateTeamMember,
     removeTeamMember,
+    requestTeamMemberLeave,
     deleteContract
 };

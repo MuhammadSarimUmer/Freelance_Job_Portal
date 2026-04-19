@@ -31,7 +31,17 @@ const createMilestoneValidator = [
     body('milestoneAmount')
         .notEmpty().withMessage('Milestone amount is required')
         .isFloat({ min: 0 })
-        .withMessage('Amount must be positive')
+        .withMessage('Amount must be positive'),
+
+    body('assigneeIDs')
+        .optional()
+        .isArray()
+        .withMessage('assigneeIDs must be an array'),
+
+    body('assigneeIDs.*')
+        .optional()
+        .isUUID()
+        .withMessage('assigneeIDs must contain valid UUIDs')
 ];
 
 const updateMilestoneValidator = [
@@ -55,7 +65,17 @@ const updateMilestoneValidator = [
     body('milestoneAmount')
         .optional()
         .isFloat({ min: 0 })
-        .withMessage('Invalid amount')
+        .withMessage('Invalid amount'),
+
+    body('assigneeIDs')
+        .optional()
+        .isArray()
+        .withMessage('assigneeIDs must be an array'),
+
+    body('assigneeIDs.*')
+        .optional()
+        .isUUID()
+        .withMessage('assigneeIDs must contain valid UUIDs')
 ];
 
 module.exports = {

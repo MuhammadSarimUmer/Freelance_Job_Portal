@@ -53,6 +53,60 @@ const notifyContractDevelopers = async (contractID, payload) => {
     }
 };
 
+const resolveDeveloperProfile = async (userId) => prisma.developer.findUnique({
+    where: { userID: userId },
+    select: { developerID: true }
+});
+
+const buildPayouts = (escrow) => {
+    const milestoneAssignments = escrow.milestone.assignments || [];
+    const contractAssignments = escrow.milestone.contract?.assignments || [];
+
+    if (milestoneAssignments.length === 0) {
+        if (contractAssignments.length === 1) {
+            return {
+                payouts: [{
+                    developerID: contractAssignments[0].developerID,
+                    sharePercent: 100
+                }]
+            };
+        }
+        return { error: 'Milestone has no assigned developers' };
+    }
+
+    if (milestoneAssignments.length === 1) {
+        return {
+            payouts: [{
+                developerID: milestoneAssignments[0].developerID,
+                sharePercent: 100
+            }]
+        };
+    }
+
+    if (contractAssignments.length !== milestoneAssignments.length) {
+        return { error: 'Shared milestones must include the full team' };
+    }
+
+    const shareMap = new Map(
+        contractAssignments.map((assignment) => [
+            assignment.developerID,
+            Number(assignment.paymentShare || 0)
+        ])
+    );
+
+    const totalShare = milestoneAssignments.reduce((sum, assignment) => sum + (shareMap.get(assignment.developerID) || 0), 0);
+    if (Math.abs(totalShare - 100) > 0.01) {
+        return { error: 'Payment shares must total 100% before releasing escrow' };
+    }
+
+    return {
+        payouts: milestoneAssignments.map((assignment) => ({
+            developerID: assignment.developerID,
+            sharePercent: shareMap.get(assignment.developerID) || 0
+        }))
+    };
+};
+
 const depositEscrow = async (req, res) => {
     try {
         const userId = req.user.userId;
@@ -187,7 +241,13 @@ const releaseEscrow = async (req, res) => {
             include: {
                 milestone: {
                     include: {
-                        contract: { select: { clientID: true } }
+                        contract: {
+                            select: {
+                                clientID: true,
+                                assignments: { select: { developerID: true, paymentShare: true } }
+                            }
+                        },
+                        assignments: { select: { developerID: true } }
                     }
                 }
             }
@@ -227,12 +287,59 @@ const releaseEscrow = async (req, res) => {
             });
         }
 
-        const updated = await prisma.paymentEscrow.update({
-            where: { escrowID },
-            data: {
-                paymentStatus: 'RELEASED',
+        const existingPayouts = await prisma.paymentPayout.findMany({
+            where: { escrowID }
+        });
+
+        if (existingPayouts.length > 0) {
+            return res.status(409).json({
+                success: false,
+                message: 'Payouts already generated for this escrow'
+            });
+        }
+
+        const payoutPlan = buildPayouts(escrow);
+        if (payoutPlan.error) {
+            return res.status(400).json({
+                success: false,
+                message: payoutPlan.error
+            });
+        }
+
+        const depositAmount = new Prisma.Decimal(escrow.depositAmount);
+        let remainder = depositAmount;
+        const payoutRows = payoutPlan.payouts.map((payout, index) => {
+            const isLast = index === payoutPlan.payouts.length - 1;
+            const amount = isLast
+                ? remainder
+                : depositAmount.mul(new Prisma.Decimal(payout.sharePercent)).div(100).toDecimalPlaces(2);
+
+            remainder = remainder.minus(amount);
+
+            return {
+                escrowID,
+                developerID: payout.developerID,
+                amount,
+                sharePercent: new Prisma.Decimal(payout.sharePercent),
+                status: 'RELEASED',
                 releaseDate: new Date()
-            }
+            };
+        });
+
+        const updated = await prisma.$transaction(async (tx) => {
+            const escrowUpdate = await tx.paymentEscrow.update({
+                where: { escrowID },
+                data: {
+                    paymentStatus: 'RELEASED',
+                    releaseDate: new Date()
+                }
+            });
+
+            await tx.paymentPayout.createMany({
+                data: payoutRows
+            });
+
+            return escrowUpdate;
         });
 
         try {
@@ -375,11 +482,24 @@ const getEscrowHistory = async (req, res) => {
             };
         }
 
+        let developerId = null;
+
         if (role === 'DEVELOPER') {
+            const developer = await resolveDeveloperProfile(userId);
+
+            if (!developer) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Developer profile not found'
+                });
+            }
+
+            developerId = developer.developerID;
+
             whereClause.milestone = {
                 ...whereClause.milestone,
                 contract: {
-                    assignments: { some: { developerID: userId } },
+                    assignments: { some: { developerID: developer.developerID } },
                     ...(contractID ? { contractID } : {})
                 }
             };
@@ -398,7 +518,10 @@ const getEscrowHistory = async (req, res) => {
                             select: { contractID: true, title: true }
                         }
                     }
-                }
+                },
+                payouts: role === 'DEVELOPER'
+                    ? { where: { developerID: developerId || '' } }
+                    : true
             },
             orderBy: { depositDate: 'desc' }
         });

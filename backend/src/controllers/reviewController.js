@@ -50,14 +50,14 @@ const createReview = async (req, res) => {
             });
         }
 
-        const existing = await prisma.review.findUnique({
-            where: { contractID }
+        const existing = await prisma.review.findFirst({
+            where: { contractID, reviewerID, revieweeID }
         });
 
         if (existing) {
             return res.status(409).json({
                 success: false,
-                message: 'A review already exists for this contract'
+                message: 'You already reviewed this person for this contract'
             });
         }
 

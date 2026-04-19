@@ -45,8 +45,12 @@ function Earnings() {
 
         const txns = history.map((e) => {
           const paymentStatus = mapPaymentStatus(e.paymentStatus);
-          const amountNum = Number(e.depositAmount ?? 0);
+          const payout = Array.isArray(e.payouts) ? e.payouts[0] : null;
+          const payoutAmount = payout?.amount ?? e.depositAmount;
+          const amountNum = Number(payoutAmount ?? 0);
           const depositAmount = `$${Number.isFinite(amountNum) ? amountNum.toFixed(2).replace(/\\.00$/, "") : "0"}`;
+          const shareNum = Number(payout?.sharePercent ?? 100);
+          const paymentShare = `${Number.isFinite(shareNum) ? shareNum : 100}%`;
 
           return {
             escrowId: e.escrowID,
@@ -54,7 +58,7 @@ function Earnings() {
             milestoneId: e.milestone?.milestoneID || null,
             contractId: e.milestone?.contract?.contractID || null,
             depositAmount,
-            paymentShare: "100%",
+            paymentShare,
             paymentStatus,
             transactionRef: e.transactionReference || null,
             depositDate: formatDate(e.depositDate),

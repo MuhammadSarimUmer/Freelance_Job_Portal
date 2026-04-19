@@ -46,7 +46,7 @@ router.put(
 router.patch(
     '/:id/status',
     verifyToken,
-    requireRoles(['CLIENT']),
+    requireRoles(['CLIENT', 'DEVELOPER']),
     milestoneController.updateMilestoneStatus
 );
 

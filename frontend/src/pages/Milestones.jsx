@@ -23,6 +23,7 @@ function Milestones() {
     description: "",
     dueDate: "",
     milestoneAmount: "",
+    assigneeIDs: [],
   });
   const [isCreating, setIsCreating] = useState(false);
   const [updatingMilestoneId, setUpdatingMilestoneId] = useState(null);
@@ -36,6 +37,12 @@ function Milestones() {
   });
   const [isLoadingEdit, setIsLoadingEdit] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  const selectedContract = useMemo(
+    () => contracts.find((c) => c.contractID === newMilestone.contractID),
+    [contracts, newMilestone.contractID]
+  );
+  const selectedAssignments = selectedContract?.assignments || [];
 
   const formatDate = (value) => {
     if (!value) return null;
@@ -97,7 +104,16 @@ function Milestones() {
       setContracts(contractsData);
 
       if (!newMilestone.contractID && contractsData.length > 0) {
-        setNewMilestone((prev) => ({ ...prev, contractID: contractsData[0].contractID }));
+        const firstContract = contractsData[0];
+        const firstAssignments = firstContract?.assignments || [];
+        const defaultAssignees = firstAssignments.length === 1 && firstAssignments[0]?.developer?.developerID
+          ? [firstAssignments[0].developer.developerID]
+          : [];
+        setNewMilestone((prev) => ({
+          ...prev,
+          contractID: firstContract.contractID,
+          assigneeIDs: defaultAssignees
+        }));
       }
 
       const milestones = milestonesRes.data?.data || [];
@@ -108,6 +124,10 @@ function Milestones() {
         const escrowStatus = escrow ? mapEscrowStatus(escrow.paymentStatus) : "Not Funded";
         const amountNum = Number(m.milestoneAmount ?? 0);
         const amount = `$${Number.isFinite(amountNum) ? amountNum.toFixed(2).replace(/\.00$/, "") : "0"}`;
+        const assignees = (m.assignments || [])
+          .map((assignment) => assignment.developer?.user?.fullName || "Developer")
+          .filter(Boolean);
+        const scope = m.scope === "SHARED" || assignees.length > 1 ? "Shared" : "Individual";
 
         return {
           milestoneId: m.milestoneID,
@@ -120,6 +140,8 @@ function Milestones() {
           amount,
           status,
           escrowStatus,
+          assignees,
+          scope,
           depositDate: escrow ? formatDate(escrow.depositDate) : null,
           releaseDate: escrow ? formatDate(escrow.releaseDate) : null,
         };
@@ -152,9 +174,19 @@ function Milestones() {
         description: newMilestone.description,
         dueDate: newMilestone.dueDate,
         milestoneAmount: Number(newMilestone.milestoneAmount),
+        assigneeIDs: newMilestone.assigneeIDs,
       });
       addToast("Milestone created.", "success");
-      setNewMilestone((prev) => ({ ...prev, title: "", description: "", dueDate: "", milestoneAmount: "" }));
+      setNewMilestone((prev) => ({
+        ...prev,
+        title: "",
+        description: "",
+        dueDate: "",
+        milestoneAmount: "",
+        assigneeIDs: selectedAssignments.length === 1 && selectedAssignments[0]?.developer?.developerID
+          ? [selectedAssignments[0].developer.developerID]
+          : [],
+      }));
       setShowForm(false);
       await fetchMilestones();
     } catch (err) {
@@ -383,7 +415,19 @@ function Milestones() {
             <div style={{ display: "grid", gap: "1rem" }}>
               <select
                 value={newMilestone.contractID}
-                onChange={(e) => setNewMilestone((prev) => ({ ...prev, contractID: e.target.value }))}
+                onChange={(e) => {
+                  const nextContractId = e.target.value;
+                  const nextContract = contracts.find((c) => c.contractID === nextContractId);
+                  const nextAssignments = nextContract?.assignments || [];
+                  const defaultAssignees = nextAssignments.length === 1 && nextAssignments[0]?.developer?.developerID
+                    ? [nextAssignments[0].developer.developerID]
+                    : [];
+                  setNewMilestone((prev) => ({
+                    ...prev,
+                    contractID: nextContractId,
+                    assigneeIDs: defaultAssignees
+                  }));
+                }}
                 style={{ padding: "0.75rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "4px" }}
               >
                 <option value="">Select Contract</option>
@@ -421,6 +465,39 @@ function Milestones() {
                   style={{ padding: "0.75rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "4px" }}
                 />
               </div>
+              {selectedAssignments.length > 0 ? (
+                <div style={{ display: "grid", gap: "0.5rem" }}>
+                  <span style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--color-outline)", fontFamily: "var(--font-label)" }}>
+                    Assign to
+                  </span>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
+                    {selectedAssignments.map((assignment) => {
+                      const devId = assignment.developer?.developerID;
+                      const label = assignment.developer?.user?.fullName || "Developer";
+                      const checked = devId ? newMilestone.assigneeIDs.includes(devId) : false;
+                      return (
+                        <label key={assignment.assignmentID} style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--color-on-surface)", fontSize: "0.85rem" }}>
+                          <input
+                            type="checkbox"
+                            disabled={!devId}
+                            checked={checked}
+                            onChange={() => {
+                              if (!devId) return;
+                              setNewMilestone((prev) => ({
+                                ...prev,
+                                assigneeIDs: prev.assigneeIDs.includes(devId)
+                                  ? prev.assigneeIDs.filter((id) => id !== devId)
+                                  : [...prev.assigneeIDs, devId],
+                              }));
+                            }}
+                          />
+                          {label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <button
                   type="button"
@@ -732,6 +809,9 @@ function Milestones() {
                     }}
                   >
                     {milestone.description}
+                  </p>
+                  <p style={{ margin: "0 0 1rem", fontSize: "0.75rem", color: "var(--color-outline)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    {milestone.scope} milestone{milestone.assignees?.length ? ` • ${milestone.assignees.join(", ")}` : ""}
                   </p>
 
                   <div

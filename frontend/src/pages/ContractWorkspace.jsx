@@ -27,7 +27,7 @@ function ContractWorkspace() {
   const [escrowModalOpen, setEscrowModalOpen] = useState(false);
   const [escrowMilestoneId, setEscrowMilestoneId] = useState("");
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
-  const [existingReview, setExistingReview] = useState(null);
+  const [existingReviews, setExistingReviews] = useState([]);
   const [isFetchingReview, setIsFetchingReview] = useState(false);
   const [disputeModalOpen, setDisputeModalOpen] = useState(false);
   const [disputes, setDisputes] = useState([]);
@@ -35,6 +35,8 @@ function ContractWorkspace() {
   const [disputeEdits, setDisputeEdits] = useState({});
   const [isSavingDisputeId, setIsSavingDisputeId] = useState(null);
   const [teamRoleEdits, setTeamRoleEdits] = useState({});
+  const [teamShareEdits, setTeamShareEdits] = useState({});
+  const [updatingShareId, setUpdatingShareId] = useState(null);
   const [techOptions, setTechOptions] = useState([]);
   const [selectedTechId, setSelectedTechId] = useState("");
   const [isAddingTech, setIsAddingTech] = useState(false);
@@ -44,6 +46,7 @@ function ContractWorkspace() {
     description: "",
     dueDate: "",
     milestoneAmount: "",
+    assigneeIDs: [],
   });
   const [isCreatingMilestone, setIsCreatingMilestone] = useState(false);
   const [newBug, setNewBug] = useState({ title: "", description: "", severity: "MINOR" });
@@ -54,6 +57,7 @@ function ContractWorkspace() {
   const [deletingMilestoneId, setDeletingMilestoneId] = useState(null);
   const [refundingEscrowId, setRefundingEscrowId] = useState(null);
   const [developerOptions, setDeveloperOptions] = useState([]);
+  const [requestingLeaveId, setRequestingLeaveId] = useState(null);
   const [assignForm, setAssignForm] = useState({
     developerID: "",
     role: "DEVELOPER",
@@ -61,6 +65,7 @@ function ContractWorkspace() {
     paymentShare: "0",
   });
   const [isAssigning, setIsAssigning] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   const statusLabelMap = {
     DRAFT: "OPEN",
@@ -68,6 +73,14 @@ function ContractWorkspace() {
     IN_PROGRESS: "IN PROGRESS",
     COMPLETED: "COMPLETED",
     CANCELLED: "CANCELLED",
+  };
+
+  const isDeveloper = user?.role === "DEVELOPER";
+  const isClient = user?.role === "CLIENT";
+
+  const parseShareValue = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
   };
 
   useEffect(() => {
@@ -79,6 +92,38 @@ function ContractWorkspace() {
     fetchMyReview();
     fetchDisputes();
   }, [contract?.contractID, user?.userID]);
+
+  const assignments = contract?.assignments || [];
+  const isOpenContract = ["DRAFT", "SIGNED"].includes(contract?.status);
+  const isClosedContract = Boolean(contract?.status) && !isOpenContract;
+  const shareValues = assignments.map((assignment) => {
+    const draftValue = teamShareEdits[assignment.assignmentID];
+    if (draftValue !== undefined) return parseShareValue(draftValue);
+    if (assignment.paymentShare !== undefined && assignment.paymentShare !== null) {
+      return parseShareValue(assignment.paymentShare);
+    }
+    return assignments.length === 1 ? 100 : 0;
+  });
+  const shareTotal = shareValues.reduce((sum, value) => sum + value, 0);
+  const isShareTotalValid = assignments.length <= 1
+    || (shareValues.every((share) => share > 0) && Math.abs(shareTotal - 100) <= 0.01);
+  const canPublish = assignments.length > 0 && isShareTotalValid;
+
+  const reviewedRevieweeIds = existingReviews
+    .map((review) => review.reviewee?.userID || review.revieweeID)
+    .filter(Boolean);
+  const baseRevieweeOptions = isClient
+    ? assignments.map((assignment) => ({
+      value: assignment.developer?.userID,
+      label: assignment.developer?.user?.fullName || "Developer",
+    })).filter((option) => option.value)
+    : contract?.client?.userID
+      ? [{ value: contract.client.userID, label: contract.client?.user?.fullName || "Client" }]
+      : [];
+  const availableRevieweeOptions = baseRevieweeOptions.filter(
+    (option) => !reviewedRevieweeIds.includes(option.value)
+  );
+  const canLeaveReview = contract?.status === "COMPLETED" && availableRevieweeOptions.length > 0;
 
   useEffect(() => {
     if (user?.role !== "CLIENT") return;
@@ -115,6 +160,15 @@ function ContractWorkspace() {
   }, [contract?.assignments]);
 
   useEffect(() => {
+    if (assignments.length !== 1) return;
+    const onlyDeveloperId = assignments[0]?.developer?.developerID;
+    setNewMilestone((prev) => {
+      if (!onlyDeveloperId || prev.assigneeIDs.length > 0) return prev;
+      return { ...prev, assigneeIDs: [onlyDeveloperId] };
+    });
+  }, [assignments]);
+
+  useEffect(() => {
     const fetchTechOptions = async () => {
       try {
         const res = await skillsService.getAllTechnologies();
@@ -147,8 +201,8 @@ function ContractWorkspace() {
     try {
       const res = await reviewService.getMyReviews();
       const reviews = res.data?.data || [];
-      const match = reviews.find((review) => review.contractID === contract.contractID);
-      setExistingReview(match || null);
+      const matches = reviews.filter((review) => review.contractID === contract.contractID);
+      setExistingReviews(matches);
     } catch (err) {
       console.error("Failed to load reviews", err);
     } finally {
@@ -238,8 +292,17 @@ function ContractWorkspace() {
         description: newMilestone.description,
         dueDate: newMilestone.dueDate,
         milestoneAmount: Number(newMilestone.milestoneAmount),
+        assigneeIDs: newMilestone.assigneeIDs,
       });
-      setNewMilestone({ title: "", description: "", dueDate: "", milestoneAmount: "" });
+      setNewMilestone({
+        title: "",
+        description: "",
+        dueDate: "",
+        milestoneAmount: "",
+        assigneeIDs: assignments.length === 1 && assignments[0]?.developer?.developerID
+          ? [assignments[0].developer.developerID]
+          : [],
+      });
       await fetchContractDetails();
       addToast("Milestone created.", "success");
     } catch (err) {
@@ -358,6 +421,10 @@ function ContractWorkspace() {
 
   const handleAssignDeveloper = async () => {
     if (!contract?.contractID) return;
+    if (isClosedContract) {
+      addToast("Contract is no longer open for new team members.", "error");
+      return;
+    }
     if (!assignForm.developerID) {
       addToast("Select a developer to assign.", "error");
       return;
@@ -382,6 +449,66 @@ function ContractWorkspace() {
       addToast(err?.response?.data?.message || "Failed to assign developer.", "error");
     } finally {
       setIsAssigning(false);
+    }
+  };
+
+  const handlePublishContract = async () => {
+    if (!contract?.contractID) return;
+    if (!canPublish) {
+      addToast("Set payment shares to total 100% before publishing.", "error");
+      return;
+    }
+
+    setIsPublishing(true);
+    try {
+      await contractService.updateContractStatus(contract.contractID, "IN_PROGRESS");
+      await fetchContractDetails();
+      addToast("Contract published.", "success");
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to publish contract.", "error");
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  const handleShareBlur = async (assignmentId) => {
+    const rawValue = teamShareEdits[assignmentId];
+    if (rawValue === undefined) return;
+
+    const nextValue = Number(rawValue);
+    if (Number.isNaN(nextValue)) {
+      addToast("Payment share must be a valid number.", "error");
+      return;
+    }
+
+    if (nextValue < 0 || nextValue > 100) {
+      addToast("Payment share must be between 0 and 100.", "error");
+      return;
+    }
+
+    setUpdatingShareId(assignmentId);
+    try {
+      await contractService.updateTeamMember(assignmentId, { paymentShare: nextValue });
+      await fetchContractDetails();
+      addToast("Payment share updated.", "success");
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to update payment share.", "error");
+    } finally {
+      setUpdatingShareId(null);
+    }
+  };
+
+  const handleRequestLeave = async (assignmentId) => {
+    if (!assignmentId) return;
+    setRequestingLeaveId(assignmentId);
+    try {
+      await contractService.requestTeamMemberLeave(assignmentId);
+      await fetchContractDetails();
+      addToast("Leave request submitted.", "success");
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to request leave.", "error");
+    } finally {
+      setRequestingLeaveId(null);
     }
   };
 
@@ -455,17 +582,8 @@ function ContractWorkspace() {
       {reviewModalOpen && contract && (
         <ReviewModal
           contract={contract}
-          revieweeOptions={(user?.role === "CLIENT"
-            ? (contract.assignments || []).map((assignment) => ({
-              value: assignment.developer?.userID,
-              label: assignment.developer?.user?.fullName || "Developer",
-            }))
-            : [{
-              value: contract.client?.userID,
-              label: contract.client?.user?.fullName || "Client",
-            }]
-          ).filter((option) => option.value)}
-          defaultRevieweeId={user?.role === "DEVELOPER" ? contract.client?.userID : undefined}
+          revieweeOptions={availableRevieweeOptions}
+          defaultRevieweeId={!isClient && contract.client?.userID ? contract.client.userID : undefined}
           onClose={() => setReviewModalOpen(false)}
           onSubmitted={fetchMyReview}
         />
@@ -500,7 +618,26 @@ function ContractWorkspace() {
                 </p>
               </div>
               <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                {contract.status === "COMPLETED" && !existingReview ? (
+                {isClient && isOpenContract ? (
+                  <button
+                    type="button"
+                    onClick={handlePublishContract}
+                    disabled={isPublishing || !canPublish}
+                    style={{
+                      background: "var(--color-primary-container)",
+                      color: "var(--color-on-primary-container)",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "0.7rem 1.2rem",
+                      cursor: isPublishing || !canPublish ? "not-allowed" : "pointer",
+                      fontFamily: "var(--font-headline)",
+                      opacity: isPublishing || !canPublish ? 0.7 : 1,
+                    }}
+                  >
+                    {isPublishing ? "Publishing..." : "Publish Contract"}
+                  </button>
+                ) : null}
+                {canLeaveReview ? (
                   <button
                     type="button"
                     onClick={() => setReviewModalOpen(true)}
@@ -685,6 +822,39 @@ function ContractWorkspace() {
                           style={{ padding: "0.65rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: 4 }}
                         />
                       </div>
+                      {assignments.length > 0 ? (
+                        <div style={{ display: "grid", gap: "0.5rem" }}>
+                          <span style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--color-outline)", fontFamily: "var(--font-label)" }}>
+                            Assign to
+                          </span>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
+                            {assignments.map((assignment) => {
+                              const devId = assignment.developer?.developerID;
+                              const label = assignment.developer?.user?.fullName || "Developer";
+                              const checked = devId ? newMilestone.assigneeIDs.includes(devId) : false;
+                              return (
+                                <label key={assignment.assignmentID} style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--color-on-surface)", fontSize: "0.85rem" }}>
+                                  <input
+                                    type="checkbox"
+                                    disabled={!devId}
+                                    checked={checked}
+                                    onChange={() => {
+                                      if (!devId) return;
+                                      setNewMilestone((prev) => ({
+                                        ...prev,
+                                        assigneeIDs: prev.assigneeIDs.includes(devId)
+                                          ? prev.assigneeIDs.filter((id) => id !== devId)
+                                          : [...prev.assigneeIDs, devId],
+                                      }));
+                                    }}
+                                  />
+                                  {label}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
                       <button
                         type="button"
                         onClick={handleCreateMilestone}
@@ -700,12 +870,21 @@ function ContractWorkspace() {
                     <div style={{ display: "grid", gap: "1rem" }}>
                       {contract.milestones.map((m) => {
                         const escrowId = m.escrow?.escrowID;
+                        const assigneeNames = (m.assignments || [])
+                          .map((assignment) => assignment.developer?.user?.fullName || "Developer")
+                          .filter(Boolean);
+                        const scopeLabel = m.scope === "SHARED" || assigneeNames.length > 1
+                          ? "Shared"
+                          : "Individual";
                         return (
                           <div key={m.milestoneID || m.title} style={{ padding: "1rem", border: "1px solid var(--color-outline-variant)", borderRadius: 6, background: "var(--color-surface-container)" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
                               <div>
                                 <p style={{ margin: 0, fontFamily: "var(--font-headline)", fontWeight: 700 }}>{m.title}</p>
                                 <p style={{ margin: "0.35rem 0", color: "var(--color-on-surface-variant)", fontSize: "0.85rem" }}>{m.description || "No description"}</p>
+                                <p style={{ margin: "0.25rem 0", color: "var(--color-outline)", fontSize: "0.75rem" }}>
+                                  {scopeLabel} milestone{assigneeNames.length > 0 ? ` • ${assigneeNames.join(", ")}` : ""}
+                                </p>
                                 <p style={{ margin: 0, color: "var(--color-outline)", fontSize: "0.75rem" }}>Due: {m.dueDate ? new Date(m.dueDate).toLocaleDateString() : "N/A"}</p>
                               </div>
                               <div style={{ minWidth: 160, textAlign: "right" }}>
@@ -713,13 +892,13 @@ function ContractWorkspace() {
                                 <select
                                   value={m.status || "PENDING"}
                                   onChange={(e) => handleUpdateMilestoneStatus(m.milestoneID, e.target.value)}
-                                  disabled={updatingMilestoneId === m.milestoneID}
+                                  disabled={updatingMilestoneId === m.milestoneID || (isDeveloper && m.status === "COMPLETED")}
                                   style={{ marginTop: "0.5rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: 4, padding: "4px 8px" }}
                                 >
-                                  <option value="PENDING">Pending</option>
+                                  <option value="PENDING" disabled={isDeveloper}>Pending</option>
                                   <option value="IN_PROGRESS">In Progress</option>
                                   <option value="IN_REVIEW">In Review</option>
-                                  <option value="COMPLETED">Completed</option>
+                                  <option value="COMPLETED" disabled={isDeveloper}>Completed</option>
                                 </select>
                               </div>
                             </div>
@@ -776,6 +955,22 @@ function ContractWorkspace() {
               {activeTab === "team" && (
                 <div>
                   <h2 style={{ fontFamily: "var(--font-headline)", fontSize: "2rem", marginBottom: "1rem" }}>Assigned Team</h2>
+                  {assignments.length === 1 ? (
+                    <p style={{ marginTop: 0, color: "var(--color-on-surface-variant)", fontSize: "0.85rem" }}>
+                      Single-member teams receive 100% of milestone payouts automatically.
+                    </p>
+                  ) : null}
+                  {isClient && assignments.length > 1 ? (
+                    <p
+                      style={{
+                        marginTop: 0,
+                        color: isShareTotalValid ? "var(--color-secondary)" : "var(--color-error)",
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      Total payment share: {Math.round(shareTotal * 100) / 100}% (must equal 100% before publishing).
+                    </p>
+                  ) : null}
                   {user?.role === "CLIENT" ? (
                     <div style={{ marginBottom: "1.5rem", display: "grid", gap: "0.75rem" }}>
                       <h4 style={{ margin: 0, fontFamily: "var(--font-headline)" }}>Assign Developer</h4>
@@ -835,64 +1030,133 @@ function ContractWorkspace() {
                           <th style={{ textAlign: "left", padding: "8px 0", color: "var(--color-on-surface-variant)", fontSize: 13 }}>Developer</th>
                           <th style={{ textAlign: "left", padding: "8px 0", color: "var(--color-on-surface-variant)", fontSize: 13 }}>Role</th>
                           <th style={{ textAlign: "left", padding: "8px 0", color: "var(--color-on-surface-variant)", fontSize: 13 }}>Pay Share</th>
-                          {user?.role === "CLIENT" ? <th style={{ padding: "8px 0" }}></th> : null}
+                          {user?.role === "CLIENT" || isDeveloper ? <th style={{ padding: "8px 0" }}></th> : null}
                         </tr>
                       </thead>
                       <tbody>
-                        {contract.assignments.map((a) => (
-                          <tr key={a.assignmentID || a.developer?.developerID || a.developer?.userID} style={{ borderTop: "1px solid var(--color-outline-variant)" }}>
-                            <td style={{ padding: "12px 0" }}>{a.developer?.user?.fullName || "Developer"}</td>
-                            <td style={{ padding: "12px 0" }}>
-                              {user?.role === "CLIENT" ? (
-                                <select
-                                  value={teamRoleEdits[a.assignmentID] ?? a.role ?? "DEVELOPER"}
-                                  onChange={async (e) => {
-                                    const nextRole = e.target.value;
-                                    const previousRole = teamRoleEdits[a.assignmentID] ?? a.role;
-                                    setTeamRoleEdits((prev) => ({
-                                      ...prev,
-                                      [a.assignmentID]: nextRole,
-                                    }));
-                                    try {
-                                      await contractService.updateTeamMember(a.assignmentID, { role: nextRole });
-                                      fetchContractDetails();
-                                    } catch (err) {
+                        {contract.assignments.map((a) => {
+                          const shareInputValue = teamShareEdits[a.assignmentID]
+                            ?? (a.paymentShare ?? (assignments.length === 1 ? 100 : ""));
+                          const canEditShare = isClient && isOpenContract && assignments.length > 1;
+                          const canRemove = isClient && (!isClosedContract || a.leaveRequestedAt);
+                          const removeLabel = !isClosedContract
+                            ? "Remove"
+                            : a.leaveRequestedAt
+                              ? "Approve Leave"
+                              : "Awaiting Leave";
+
+                          return (
+                            <tr key={a.assignmentID || a.developer?.developerID || a.developer?.userID} style={{ borderTop: "1px solid var(--color-outline-variant)" }}>
+                              <td style={{ padding: "12px 0" }}>{a.developer?.user?.fullName || "Developer"}</td>
+                              <td style={{ padding: "12px 0" }}>
+                                {isClient ? (
+                                  <select
+                                    value={teamRoleEdits[a.assignmentID] ?? a.role ?? "DEVELOPER"}
+                                    onChange={async (e) => {
+                                      const nextRole = e.target.value;
+                                      const previousRole = teamRoleEdits[a.assignmentID] ?? a.role;
                                       setTeamRoleEdits((prev) => ({
                                         ...prev,
-                                        [a.assignmentID]: previousRole,
+                                        [a.assignmentID]: nextRole,
                                       }));
-                                      addToast(err?.response?.data?.message || "Failed to update team member.", "error");
-                                    }
-                                  }}
-                                  style={{ background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: 4, padding: "4px 8px" }}
-                                >
-                                  <option value="LEAD">Lead</option>
-                                  <option value="DEVELOPER">Developer</option>
-                                  <option value="REVIEWER">Reviewer</option>
-                                </select>
-                              ) : a.role}
-                            </td>
-                            <td style={{ padding: "12px 0" }}>{a.paymentShare ?? a.contributionPercentage ?? "-"}%</td>
-                            {user?.role === "CLIENT" ? (
-                              <td style={{ padding: "12px 0", textAlign: "right" }}>
-                                <button
-                                  onClick={async () => {
-                                    if (!window.confirm("Remove this developer from the team?")) return;
-                                    try {
-                                      await contractService.removeTeamMember(a.assignmentID);
-                                      fetchContractDetails();
-                                    } catch (err) {
-                                      addToast(err?.response?.data?.message || "Failed to remove team member.", "error");
-                                    }
-                                  }}
-                                  style={{ background: "none", border: "none", color: "var(--color-error)", cursor: "pointer", fontSize: 13 }}
-                                >
-                                  Remove
-                                </button>
+                                      try {
+                                        await contractService.updateTeamMember(a.assignmentID, { role: nextRole });
+                                        fetchContractDetails();
+                                      } catch (err) {
+                                        setTeamRoleEdits((prev) => ({
+                                          ...prev,
+                                          [a.assignmentID]: previousRole,
+                                        }));
+                                        addToast(err?.response?.data?.message || "Failed to update team member.", "error");
+                                      }
+                                    }}
+                                    style={{ background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: 4, padding: "4px 8px" }}
+                                  >
+                                    <option value="LEAD">Lead</option>
+                                    <option value="DEVELOPER">Developer</option>
+                                    <option value="REVIEWER">Reviewer</option>
+                                  </select>
+                                ) : a.role}
                               </td>
-                            ) : null}
-                          </tr>
-                        ))}
+                              <td style={{ padding: "12px 0" }}>
+                                {canEditShare ? (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={shareInputValue}
+                                    onChange={(e) =>
+                                      setTeamShareEdits((prev) => ({
+                                        ...prev,
+                                        [a.assignmentID]: e.target.value,
+                                      }))
+                                    }
+                                    onBlur={() => handleShareBlur(a.assignmentID)}
+                                    disabled={updatingShareId === a.assignmentID}
+                                    style={{
+                                      width: "90px",
+                                      padding: "4px 8px",
+                                      background: "var(--color-surface)",
+                                      color: "var(--color-on-surface)",
+                                      border: "1px solid var(--color-outline-variant)",
+                                      borderRadius: 4,
+                                    }}
+                                  />
+                                ) : (
+                                  <span>
+                                    {parseShareValue(shareInputValue)}%
+                                  </span>
+                                )}
+                              </td>
+                              {isClient ? (
+                                <td style={{ padding: "12px 0", textAlign: "right" }}>
+                                  <button
+                                    onClick={async () => {
+                                      if (!canRemove) return;
+                                      if (!window.confirm("Remove this developer from the team?")) return;
+                                      try {
+                                        await contractService.removeTeamMember(a.assignmentID);
+                                        fetchContractDetails();
+                                      } catch (err) {
+                                        addToast(err?.response?.data?.message || "Failed to remove team member.", "error");
+                                      }
+                                    }}
+                                    disabled={!canRemove}
+                                    style={{
+                                      background: "none",
+                                      border: "none",
+                                      color: canRemove ? "var(--color-error)" : "var(--color-outline)",
+                                      cursor: canRemove ? "pointer" : "not-allowed",
+                                      fontSize: 13,
+                                    }}
+                                  >
+                                    {removeLabel}
+                                  </button>
+                                </td>
+                              ) : isDeveloper ? (
+                                <td style={{ padding: "12px 0", textAlign: "right" }}>
+                                  {isClosedContract ? (
+                                    <button
+                                      onClick={() => handleRequestLeave(a.assignmentID)}
+                                      disabled={Boolean(a.leaveRequestedAt) || requestingLeaveId === a.assignmentID}
+                                      style={{
+                                        background: "none",
+                                        border: "1px solid var(--color-outline-variant)",
+                                        borderRadius: 4,
+                                        color: "var(--color-on-surface)",
+                                        padding: "4px 8px",
+                                        cursor: a.leaveRequestedAt || requestingLeaveId === a.assignmentID ? "not-allowed" : "pointer",
+                                        fontSize: 13,
+                                      }}
+                                    >
+                                      {a.leaveRequestedAt ? "Leave Requested" : requestingLeaveId === a.assignmentID ? "Requesting..." : "Request Leave"}
+                                    </button>
+                                  ) : null}
+                                </td>
+                              ) : null}
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   ) : (

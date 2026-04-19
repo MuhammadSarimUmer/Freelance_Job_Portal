@@ -105,6 +105,13 @@ router.delete(
 );
 
 router.post(
+    '/team/:id/leave-request',
+    verifyToken,
+    requireRoles(['DEVELOPER']),
+    contractController.requestTeamMemberLeave
+);
+
+router.post(
     '/:id/proposals',
     verifyToken,
     requireDeveloper,

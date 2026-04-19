@@ -31,10 +31,44 @@ const verifyMilestoneOwnership = async (milestoneID, userId) => {
     return { milestone, client };
 };
 
+const resolveDeveloperProfile = async (userId) => prisma.developer.findUnique({
+    where: { userID: userId },
+    select: { developerID: true }
+});
+
+const resolveAssignees = (assigneeIDs) => {
+    if (!Array.isArray(assigneeIDs)) return [];
+    return Array.from(new Set(assigneeIDs.filter(Boolean)));
+};
+
+const verifyMilestoneAssignment = async (milestoneID, developerID) => {
+    const milestone = await prisma.milestone.findUnique({
+        where: { milestoneID },
+        select: { contractID: true, status: true }
+    });
+
+    if (!milestone) return { error: 'Milestone not found', status: 404 };
+
+    const assignment = await prisma.contractAssignment.findUnique({
+        where: {
+            developerID_contractID: {
+                developerID,
+                contractID: milestone.contractID
+            }
+        }
+    });
+
+    if (!assignment) {
+        return { error: 'Forbidden - You are not assigned to this contract', status: 403 };
+    }
+
+    return { milestone };
+};
+
 const createMilestone = async (req, res) => {
     try {
         const userId = req.user.userId;
-        const { contractID, title, description, dueDate, milestoneAmount } = req.body;
+        const { contractID, title, description, dueDate, milestoneAmount, assigneeIDs } = req.body;
 
         // Verify the client owns the contract
         const client = await prisma.client.findUnique({
@@ -68,6 +102,41 @@ const createMilestone = async (req, res) => {
             });
         }
 
+        const contractAssignments = await prisma.contractAssignment.findMany({
+            where: { contractID },
+            select: { developerID: true }
+        });
+        const teamDeveloperIds = contractAssignments.map((assignment) => assignment.developerID);
+
+        let resolvedAssignees = resolveAssignees(assigneeIDs);
+        const invalidAssignees = resolvedAssignees.filter((id) => !teamDeveloperIds.includes(id));
+        if (invalidAssignees.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Assignees must be part of the contract team'
+            });
+        }
+
+        if (teamDeveloperIds.length > 0 && resolvedAssignees.length === 0) {
+            if (teamDeveloperIds.length === 1) {
+                resolvedAssignees = [teamDeveloperIds[0]];
+            } else {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Select at least one team member for this milestone'
+                });
+            }
+        }
+
+        if (resolvedAssignees.length > 1 && resolvedAssignees.length !== teamDeveloperIds.length) {
+            return res.status(400).json({
+                success: false,
+                message: 'Shared milestones must include all team members'
+            });
+        }
+
+        const scope = resolvedAssignees.length > 1 ? 'SHARED' : 'INDIVIDUAL';
+
         const milestone = await prisma.milestone.create({
             data: {
                 contractID,
@@ -75,9 +144,19 @@ const createMilestone = async (req, res) => {
                 description,
                 dueDate: new Date(dueDate),
                 milestoneAmount: new Prisma.Decimal(milestoneAmount),
-                status: 'PENDING'
+                status: 'PENDING',
+                scope
             }
         });
+
+        if (resolvedAssignees.length > 0) {
+            await prisma.milestoneAssignment.createMany({
+                data: resolvedAssignees.map((developerID) => ({
+                    milestoneID: milestone.milestoneID,
+                    developerID
+                }))
+            });
+        }
 
         return res.status(201).json({
             success: true,
@@ -123,10 +202,19 @@ const getMilestones = async (req, res) => {
         }
 
         if (role === 'DEVELOPER') {
+            const developer = await resolveDeveloperProfile(userId);
+
+            if (!developer) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Developer profile not found'
+                });
+            }
+
             whereClause.contract = {
                 ...whereClause.contract,
                 assignments: {
-                    some: { developerID: userId }
+                    some: { developerID: developer.developerID }
                 }
             };
         }
@@ -137,7 +225,22 @@ const getMilestones = async (req, res) => {
                 contract: {
                     select: { contractID: true, title: true, status: true }
                 },
-                escrow: true
+                escrow: true,
+                assignments: {
+                    include: {
+                        developer: {
+                            include: {
+                                user: {
+                                    select: {
+                                        fullName: true,
+                                        email: true,
+                                        profileImageUrl: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             },
             orderBy: { dueDate: 'asc' }
         });
@@ -163,7 +266,22 @@ const getMilestoneById = async (req, res) => {
                 contract: {
                     select: { contractID: true, title: true, status: true, clientID: true }
                 },
-                escrow: true
+                escrow: true,
+                assignments: {
+                    include: {
+                        developer: {
+                            include: {
+                                user: {
+                                    select: {
+                                        fullName: true,
+                                        email: true,
+                                        profileImageUrl: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         });
 
@@ -202,7 +320,7 @@ const updateMilestone = async (req, res) => {
             });
         }
 
-        const allowedFields = ['title', 'description', 'dueDate', 'milestoneAmount'];
+        const allowedFields = ['title', 'description', 'dueDate', 'milestoneAmount', 'assigneeIDs'];
         let updateData = {};
 
         for (let key of allowedFields) {
@@ -213,6 +331,42 @@ const updateMilestone = async (req, res) => {
                     updateData[key] = new Prisma.Decimal(req.body[key]);
                 } else if (key === 'title') {
                     updateData[key] = req.body[key].trim();
+                } else if (key === 'assigneeIDs') {
+                    const contractAssignments = await prisma.contractAssignment.findMany({
+                        where: { contractID: ownership.milestone.contractID },
+                        select: { developerID: true }
+                    });
+                    const teamDeveloperIds = contractAssignments.map((assignment) => assignment.developerID);
+                    let resolvedAssignees = resolveAssignees(req.body.assigneeIDs);
+                    const invalidAssignees = resolvedAssignees.filter((id) => !teamDeveloperIds.includes(id));
+                    if (invalidAssignees.length > 0) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Assignees must be part of the contract team'
+                        });
+                    }
+
+                    if (teamDeveloperIds.length > 0 && resolvedAssignees.length === 0) {
+                        if (teamDeveloperIds.length === 1) {
+                            resolvedAssignees = [teamDeveloperIds[0]];
+                        } else {
+                            return res.status(400).json({
+                                success: false,
+                                message: 'Select at least one team member for this milestone'
+                            });
+                        }
+                    }
+
+                    if (resolvedAssignees.length > 1 && resolvedAssignees.length !== teamDeveloperIds.length) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Shared milestones must include all team members'
+                        });
+                    }
+
+                    const scope = resolvedAssignees.length > 1 ? 'SHARED' : 'INDIVIDUAL';
+                    updateData.scope = scope;
+                    updateData.assigneeIDs = resolvedAssignees;
                 } else {
                     updateData[key] = req.body[key];
                 }
@@ -226,10 +380,27 @@ const updateMilestone = async (req, res) => {
             });
         }
 
+        const { assigneeIDs: nextAssignees, ...milestoneUpdateData } = updateData;
+
         const updated = await prisma.milestone.update({
             where: { milestoneID: id },
-            data: updateData
+            data: milestoneUpdateData
         });
+
+        if (nextAssignees) {
+            await prisma.milestoneAssignment.deleteMany({
+                where: { milestoneID: id }
+            });
+
+            if (nextAssignees.length > 0) {
+                await prisma.milestoneAssignment.createMany({
+                    data: nextAssignees.map((developerID) => ({
+                        milestoneID: id,
+                        developerID
+                    }))
+                });
+            }
+        }
 
         return res.status(200).json({
             success: true,
@@ -256,18 +427,44 @@ const updateMilestoneStatus = async (req, res) => {
             });
         }
 
-        const ownership = await verifyMilestoneOwnership(id, userId);
-        if (ownership.error) {
-            return res.status(ownership.status).json({
-                success: false,
-                message: ownership.error
-            });
-        }
+        let updateData = { status };
 
-        const updateData = { status };
+        if (req.user.role === 'CLIENT') {
+            const ownership = await verifyMilestoneOwnership(id, userId);
+            if (ownership.error) {
+                return res.status(ownership.status).json({
+                    success: false,
+                    message: ownership.error
+                });
+            }
 
-        if (status === 'COMPLETED') {
-            updateData.completeDate = new Date();
+            if (status === 'COMPLETED') {
+                updateData.completeDate = new Date();
+            }
+        } else if (req.user.role === 'DEVELOPER') {
+            const developer = await resolveDeveloperProfile(userId);
+            if (!developer) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Developer profile not found'
+                });
+            }
+
+            const assignment = await verifyMilestoneAssignment(id, developer.developerID);
+            if (assignment.error) {
+                return res.status(assignment.status).json({
+                    success: false,
+                    message: assignment.error
+                });
+            }
+
+            const allowedDeveloperStatuses = ['IN_PROGRESS', 'IN_REVIEW'];
+            if (!allowedDeveloperStatuses.includes(status)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Developers can only move milestones to In Progress or In Review'
+                });
+            }
         }
 
         const updated = await prisma.milestone.update({

@@ -49,7 +49,7 @@ const resolveDeveloperProfile = async (userId) => prisma.developer.findUnique({
 });
 
 const assertOpenContract = (contract) => {
-    if (!contract || contract.status !== 'DRAFT') {
+    if (!contract || !['DRAFT', 'SIGNED'].includes(contract.status)) {
         const error = new Error('Contract is not open for hiring');
         error.statusCode = 400;
         throw error;
@@ -417,19 +417,6 @@ const acceptProposal = async (req, res) => {
                     declineReason: null
                 },
                 include: contractInclude
-            });
-
-            await tx.contractProposal.updateMany({
-                where: {
-                    contractID: proposal.contractID,
-                    proposalID: { not: proposalId },
-                    status: 'PENDING'
-                },
-                data: {
-                    status: 'DECLINED',
-                    decidedAt: new Date(),
-                    declineReason: 'Accepted another proposal'
-                }
             });
 
             return { assignment, proposal: acceptedProposal };
