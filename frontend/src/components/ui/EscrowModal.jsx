@@ -68,6 +68,27 @@ function EscrowModal({ milestoneId, onClose }) {
           transition: border-color 0.3s ease;
         }
         .modal-input:focus { border-bottom-color: var(--color-primary); }
+        .escrow-note {
+          background: var(--color-surface-container-low);
+          border: 1px dashed var(--color-outline-variant);
+          border-radius: 8px;
+          padding: 0.85rem 1rem;
+          margin-bottom: 1.5rem;
+          display: grid;
+          gap: 0.35rem;
+        }
+        .escrow-badge {
+          align-self: start;
+          display: inline-flex;
+          padding: 0.2rem 0.6rem;
+          border-radius: 999px;
+          font-size: 0.6rem;
+          text-transform: uppercase;
+          letter-spacing: 0.18em;
+          font-weight: 700;
+          background: var(--color-primary-container);
+          color: var(--color-on-primary-container);
+        }
       `}</style>
       <div className="modal-overlay" onClick={onClose}>
         <div className="modal-surface" onClick={e => e.stopPropagation()}>
@@ -75,6 +96,12 @@ function EscrowModal({ milestoneId, onClose }) {
           <p style={{ color: "var(--color-on-surface-variant)", marginBottom: "2rem" }}>
             Securely lock funds in the workspace matrix.
           </p>
+          <div className="escrow-note">
+            <span className="escrow-badge">Simulation</span>
+            <span style={{ color: "var(--color-on-surface-variant)", fontSize: "0.85rem" }}>
+              This demo records an escrow deposit instantly. No real payment is processed.
+            </span>
+          </div>
           <input 
             type="number" 
             placeholder="$0.00" 

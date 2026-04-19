@@ -568,6 +568,38 @@ function ContractWorkspace() {
           transition: opacity 0.3s ease;
         }
         .neon-btn:hover { opacity: 0.9; }
+        .escrow-callout {
+          background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0));
+          border: 1px solid var(--color-outline-variant);
+          border-radius: 10px;
+          padding: 1rem 1.25rem;
+          margin-bottom: 1.5rem;
+          display: grid;
+          gap: 0.35rem;
+        }
+        .escrow-cta {
+          background: linear-gradient(135deg, var(--color-primary), var(--color-primary-container));
+          color: var(--color-on-primary);
+          border: none;
+          border-radius: 6px;
+          padding: 0.45rem 0.9rem;
+          cursor: pointer;
+          font-weight: 700;
+          letter-spacing: 0.02em;
+          box-shadow: 0 10px 20px rgba(0,0,0,0.25);
+        }
+        .escrow-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          padding: 0.2rem 0.6rem;
+          border-radius: 999px;
+          border: 1px solid var(--color-outline-variant);
+          font-size: 0.7rem;
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+          font-weight: 700;
+        }
       `}</style>
       
       <Sidebar activePage="Contracts" role={user?.role?.toLowerCase() || "developer"} />
@@ -704,6 +736,19 @@ function ContractWorkspace() {
               {activeTab === "milestones" && (
                 <div>
                   <h2 style={{ fontFamily: "var(--font-headline)", fontSize: "2rem", marginBottom: "1rem" }}>Project Milestones</h2>
+                  {user?.role === "CLIENT" ? (
+                    <div className="escrow-callout">
+                      <span style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.2em", color: "var(--color-secondary)", fontWeight: 700 }}>
+                        Escrow simulation
+                      </span>
+                      <span style={{ color: "var(--color-on-surface-variant)", fontSize: "0.9rem" }}>
+                        Funding a milestone creates an escrow record immediately. No real payment is processed.
+                      </span>
+                      <span style={{ color: "var(--color-on-surface-variant)", fontSize: "0.85rem" }}>
+                        Release is available after a milestone is marked completed and shares total 100%.
+                      </span>
+                    </div>
+                  ) : null}
                   <div style={{ marginBottom: "2rem" }}>
                     <h3 style={{ fontFamily: "var(--font-headline)", fontSize: "1.1rem", marginBottom: "0.75rem" }}>
                       Required Tech Stack
@@ -870,6 +915,29 @@ function ContractWorkspace() {
                     <div style={{ display: "grid", gap: "1rem" }}>
                       {contract.milestones.map((m) => {
                         const escrowId = m.escrow?.escrowID;
+                        const escrowStatus = m.escrow?.paymentStatus || "NOT_FUNDED";
+                        const escrowLabelMap = {
+                          NOT_FUNDED: "Not funded",
+                          PENDING: "Pending",
+                          DEPOSITED: "Funded",
+                          RELEASED: "Released",
+                          REFUNDED: "Refunded",
+                        };
+                        const escrowToneMap = {
+                          NOT_FUNDED: "var(--color-outline)",
+                          PENDING: "var(--color-secondary)",
+                          DEPOSITED: "var(--color-primary)",
+                          RELEASED: "var(--color-secondary)",
+                          REFUNDED: "var(--color-error)",
+                        };
+                        const escrowLabel = escrowLabelMap[escrowStatus] || escrowStatus;
+                        const escrowAccent = escrowToneMap[escrowStatus] || "var(--color-outline)";
+                        const escrowAmount = m.escrow?.depositAmount
+                          ? Number(m.escrow.depositAmount)
+                          : null;
+                        const escrowAmountLabel = Number.isFinite(escrowAmount)
+                          ? `$${escrowAmount.toFixed(2)}`
+                          : null;
                         const assigneeNames = (m.assignments || [])
                           .map((assignment) => assignment.developer?.user?.fullName || "Developer")
                           .filter(Boolean);
@@ -886,6 +954,14 @@ function ContractWorkspace() {
                                   {scopeLabel} milestone{assigneeNames.length > 0 ? ` • ${assigneeNames.join(", ")}` : ""}
                                 </p>
                                 <p style={{ margin: 0, color: "var(--color-outline)", fontSize: "0.75rem" }}>Due: {m.dueDate ? new Date(m.dueDate).toLocaleDateString() : "N/A"}</p>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
+                                  <span className="escrow-pill" style={{ borderColor: escrowAccent, color: escrowAccent }}>
+                                    Escrow: {escrowLabel}
+                                  </span>
+                                  <span style={{ color: "var(--color-outline)", fontSize: "0.75rem" }}>
+                                    {escrowAmountLabel ? `Deposited ${escrowAmountLabel}` : "No funds held yet"}
+                                  </span>
+                                </div>
                               </div>
                               <div style={{ minWidth: 160, textAlign: "right" }}>
                                 <p style={{ margin: 0, fontFamily: "var(--font-headline)", fontWeight: 700 }}>${Number(m.milestoneAmount || 0)}</p>
@@ -907,9 +983,9 @@ function ContractWorkspace() {
                                 <button
                                   type="button"
                                   onClick={() => openEscrowForMilestone(m.milestoneID)}
-                                  style={{ background: "var(--color-primary-container)", color: "var(--color-on-primary-container)", border: "none", borderRadius: 4, padding: "0.4rem 0.75rem", cursor: "pointer" }}
+                                  className="escrow-cta"
                                 >
-                                  Fund Escrow
+                                  Fund Escrow (Simulated)
                                 </button>
                               ) : null}
                               {user?.role === "CLIENT" && escrowId ? (
