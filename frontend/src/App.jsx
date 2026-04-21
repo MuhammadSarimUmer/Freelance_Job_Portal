@@ -22,6 +22,10 @@ import ProfileSettings from "./pages/ProfileSettings";
 import BugReports from "./pages/BugReports";
 import Milestones from "./pages/Milestones";
 import Earnings from "./pages/Earnings";
+import Escrow from "./pages/Escrow";
+import Support from "./pages/Support";
+import TermsOfService from "./pages/TermsOfService";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 import NotFound from "./pages/NotFound";
 import ForgotPassword from "./pages/ForgotPassword";
 import RoleRoute from "./components/routing/RoleRoute";
@@ -104,6 +108,13 @@ function App() {
                 path="/earnings"
                 element={<RoleRoute allow={["DEVELOPER", "CLIENT"]}><Earnings /></RoleRoute>}
               />
+              <Route
+                path="/escrow"
+                element={<RoleRoute allow={["CLIENT"]}><Escrow /></RoleRoute>}
+              />
+              <Route path="/support" element={<Support />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>

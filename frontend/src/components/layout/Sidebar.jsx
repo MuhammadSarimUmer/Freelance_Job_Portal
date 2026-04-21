@@ -12,8 +12,8 @@ function Sidebar({ activePage, role = "developer" }) {
   const [isOpen, setIsOpen] = useState(false);
   const { user, logout, loading } = useAuth();
 
-  const navItems = role === "developer" ? developerNav : clientNav;
   const resolvedRole = user?.role?.toLowerCase() || role;
+  const navItems = resolvedRole === "developer" ? developerNav : clientNav;
   const profileData = resolvedRole === "developer" ? user?.developer : user?.client;
   const displayName = user?.fullName || "Account";
   const initials = displayName
@@ -37,7 +37,7 @@ function Sidebar({ activePage, role = "developer" }) {
       return;
     }
     if (label === "Help Center") {
-      navigate("/");
+      navigate("/support");
     }
   };
 
@@ -97,6 +97,8 @@ function Sidebar({ activePage, role = "developer" }) {
           zIndex: 50,
           borderRight: "1px solid var(--color-outline-variant)",
           transition: "transform 0.3s ease, background 0.3s ease",
+          overflowY: "auto",
+          overscrollBehavior: "contain",
         }}
       >
         {/* Responsive CSS handled locally or via globals, we'll inject style block for drawer logic */}

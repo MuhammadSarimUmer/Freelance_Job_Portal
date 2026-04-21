@@ -2,10 +2,10 @@ const { body } = require('express-validator');
 
 const createProposalValidator = [
     body('message')
-        .optional()
+        .optional({ checkFalsy: true })
         .trim()
-        .isLength({ min: 10, max: 4000 })
-        .withMessage('Message must be between 10 and 4000 characters'),
+        .isLength({ min: 1, max: 4000 })
+        .withMessage('Message must be between 1 and 4000 characters'),
     body('proposedRate')
         .optional()
         .isFloat({ min: 0 })

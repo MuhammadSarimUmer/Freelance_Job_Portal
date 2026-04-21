@@ -43,7 +43,7 @@ function PublicDeveloperProfile() {
 
   return (
     <div style={{ backgroundColor: "var(--color-background)", minHeight: "100vh", display: "flex" }}>
-      <Sidebar activePage="Directory" role="client" />
+      <Sidebar activePage="Developer Directory" role="client" />
       <main style={{ marginLeft: 256, flex: 1, padding: "calc(96px + 3rem) 3rem 3rem", maxWidth: 900 }}>
         <button
           onClick={() => navigate(-1)}

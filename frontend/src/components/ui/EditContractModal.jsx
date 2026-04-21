@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { contractService } from "../../api/services/contractService";
 import { useToast } from "../../context/ToastContext";
+import ConfirmDialog from "./ConfirmDialog";
 
 function EditContractModal({ contract, onClose, onSaved }) {
   const { addToast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -50,7 +52,6 @@ function EditContractModal({ contract, onClose, onSaved }) {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("Are you sure you want to permanently delete this contract?")) return;
     try {
       setIsProcessing(true);
       await contractService.deleteContract
@@ -63,6 +64,7 @@ function EditContractModal({ contract, onClose, onSaved }) {
       addToast(err?.response?.data?.message || "Failed to delete contract.", "error");
     } finally {
       setIsProcessing(false);
+      setConfirmDeleteOpen(false);
     }
   };
 
@@ -280,7 +282,7 @@ function EditContractModal({ contract, onClose, onSaved }) {
           >
             <button
               type="button"
-              onClick={handleDelete}
+              onClick={() => setConfirmDeleteOpen(true)}
               disabled={isProcessing}
               style={{
                 background: "transparent",
@@ -302,6 +304,16 @@ function EditContractModal({ contract, onClose, onSaved }) {
             </button>
           </div>
         </form>
+
+        <ConfirmDialog
+          open={confirmDeleteOpen}
+          title="Delete contract"
+          message="This will permanently delete the contract and all associated data. This action cannot be undone."
+          confirmLabel="Delete"
+          tone="danger"
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmDeleteOpen(false)}
+        />
       </div>
     </div>
   );

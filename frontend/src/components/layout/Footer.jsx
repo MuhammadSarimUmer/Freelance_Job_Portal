@@ -1,4 +1,4 @@
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { footerLinks, footerCopyright } from "../../data/mockData";
 import logoDark from "../../assets/logo_dark.png";
 import logoLight from "../../assets/logo_light.png";
@@ -7,6 +7,7 @@ import { useTheme } from "../../context/ThemeContext";
 function Footer() {
   const { isDark } = useTheme();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
 
   return (
     <footer
@@ -48,7 +49,7 @@ function Footer() {
         <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap", alignItems: "center" }}>
           {footerLinks.map((link) => (
             <span
-              key={link}
+              key={link.label}
               style={{
                 color: "var(--color-secondary)",
                 fontSize: "0.875rem",
@@ -58,8 +59,9 @@ function Footer() {
               }}
               onMouseEnter={(e) => (e.target.style.color = "var(--color-primary-container)")}
               onMouseLeave={(e) => (e.target.style.color = "var(--color-secondary)")}
+              onClick={() => navigate(link.path)}
             >
-              {link}
+              {link.label}
             </span>
           ))}
         </div>

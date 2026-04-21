@@ -69,6 +69,7 @@ const createMilestone = async (req, res) => {
     try {
         const userId = req.user.userId;
         const { contractID, title, description, dueDate, milestoneAmount, assigneeIDs } = req.body;
+        const safeDescription = (description ?? '').trim();
 
         // Verify the client owns the contract
         const client = await prisma.client.findUnique({
@@ -141,7 +142,7 @@ const createMilestone = async (req, res) => {
             data: {
                 contractID,
                 title: title.trim(),
-                description,
+                description: safeDescription,
                 dueDate: new Date(dueDate),
                 milestoneAmount: new Prisma.Decimal(milestoneAmount),
                 status: 'PENDING',

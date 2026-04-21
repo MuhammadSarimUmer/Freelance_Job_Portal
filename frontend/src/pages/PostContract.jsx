@@ -22,6 +22,7 @@ const PostContract = () => {
   const [customTechCategory, setCustomTechCategory] = useState("");
   const [isCreatingTech, setIsCreatingTech] = useState(false);
   const [milestoneDraft, setMilestoneDraft] = useState({ title: "", amount: "", due: "" });
+  const [editingMilestoneId, setEditingMilestoneId] = useState(null);
   const [formData, setFormData] = useState({
     // App info (Step 1 — used to create Application record)
     appName: "",
@@ -39,6 +40,12 @@ const PostContract = () => {
   const budgetValue = Number(formData.budget || 0);
   const totalMilestoneAmount = milestones.reduce((sum, milestone) => sum + Number(milestone.amount || 0), 0);
   const remainingBudget = Math.max(budgetValue - totalMilestoneAmount, 0);
+  const editingMilestone = editingMilestoneId
+    ? milestones.find((milestone) => milestone.id === editingMilestoneId)
+    : null;
+  const editRemainingBudget = budgetValue > 0
+    ? Math.max(budgetValue - (totalMilestoneAmount - Number(editingMilestone?.amount || 0)), 0)
+    : 0;
 
   const handleInput = (e) =>
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -53,20 +60,44 @@ const PostContract = () => {
       addToast("Milestone amount must be greater than zero.", "error");
       return;
     }
-    if (Number(formData.budget || 0) > 0 && amountValue > remainingBudget) {
+
+    const editingMilestone = editingMilestoneId
+      ? milestones.find((milestone) => milestone.id === editingMilestoneId)
+      : null;
+    const editingAmount = editingMilestone ? Number(editingMilestone.amount || 0) : 0;
+    const maxAllowed = Number(formData.budget || 0) > 0
+      ? Number(formData.budget || 0) - (totalMilestoneAmount - editingAmount)
+      : null;
+
+    if (Number(formData.budget || 0) > 0 && amountValue > maxAllowed) {
       addToast("Milestone exceeds remaining budget.", "error");
       return;
     }
+
     setMilestoneDeferred(false);
-    setMilestones((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        title: milestoneDraft.title.trim(),
-        amount: amountValue,
-        dueDate: milestoneDraft.due,
-      },
-    ]);
+    if (editingMilestoneId) {
+      setMilestones((prev) => prev.map((milestone) => (
+        milestone.id === editingMilestoneId
+          ? {
+            ...milestone,
+            title: milestoneDraft.title.trim(),
+            amount: amountValue,
+            dueDate: milestoneDraft.due,
+          }
+          : milestone
+      )));
+      setEditingMilestoneId(null);
+    } else {
+      setMilestones((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          title: milestoneDraft.title.trim(),
+          amount: amountValue,
+          dueDate: milestoneDraft.due,
+        },
+      ]);
+    }
     setMilestoneDraft({ title: "", amount: "", due: "" });
   };
 
@@ -78,6 +109,25 @@ const PostContract = () => {
       }
       return next;
     });
+    if (editingMilestoneId === id) {
+      setEditingMilestoneId(null);
+      setMilestoneDraft({ title: "", amount: "", due: "" });
+    }
+  };
+
+  const startEditMilestone = (milestone) => {
+    if (!milestone) return;
+    setMilestoneDraft({
+      title: milestone.title || "",
+      amount: milestone.amount || "",
+      due: milestone.dueDate || "",
+    });
+    setEditingMilestoneId(milestone.id);
+  };
+
+  const cancelEditMilestone = () => {
+    setEditingMilestoneId(null);
+    setMilestoneDraft({ title: "", amount: "", due: "" });
   };
 
   const generateMilestones = (count = 3) => {
@@ -106,6 +156,8 @@ const PostContract = () => {
     });
     setMilestoneDeferred(false);
     setMilestones(milestonesGenerated);
+    setEditingMilestoneId(null);
+    setMilestoneDraft({ title: "", amount: "", due: "" });
   };
 
   const deferMilestones = () => {
@@ -124,6 +176,8 @@ const PostContract = () => {
         dueDate,
       },
     ]);
+    setEditingMilestoneId(null);
+    setMilestoneDraft({ title: "", amount: "", due: "" });
   };
 
   useEffect(() => {
@@ -262,20 +316,7 @@ const PostContract = () => {
 
   const progress = (step / 4) * 100;
   const milestoneCoverage = budgetValue > 0 ? Math.min(totalMilestoneAmount / budgetValue, 1) : 0;
-  const matchStrength = Math.min(
-    100,
-    Math.round(
-      25 +
-      (formData.appName ? 10 : 0) +
-      (formData.description ? 10 : 0) +
-      (formData.title ? 10 : 0) +
-      (formData.budget ? 10 : 0) +
-      (formData.startDate ? 5 : 0) +
-      (formData.techTags.length ? 10 : 0) +
-      (milestones.length ? 15 : 0) +
-      Math.round(milestoneCoverage * 5)
-    )
-  );
+  const milestoneCoveragePercent = Math.round(milestoneCoverage * 100);
   const appTypeLabelMap = {
     WEB: "Web Application",
     MOBILE: "Mobile App",
@@ -323,6 +364,21 @@ const PostContract = () => {
       grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
       gap: 0.75rem;
       align-items: center;
+    }
+    .input-field {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid var(--color-outline-variant-strong);
+      padding: 0.75rem 0;
+      color: var(--color-on-surface);
+      font-size: 1rem;
+      outline: none;
+      font-family: var(--font-body);
+      transition: border-color 0.3s ease;
+    }
+    .input-field:focus {
+      border-bottom-color: var(--color-secondary);
     }
     .tech-chip {
       display: inline-flex;
@@ -1066,10 +1122,34 @@ const PostContract = () => {
                             className="material-symbols-outlined"
                             style={{ fontSize: "1.1rem" }}
                           >
-                            add
+                            {editingMilestoneId ? "save" : "add"}
                           </span>
-                          Add Milestone
+                          {editingMilestoneId ? "Save Changes" : "Add Milestone"}
                         </button>
+                        {editingMilestoneId ? (
+                          <button
+                            type="button"
+                            onClick={cancelEditMilestone}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              background: "transparent",
+                              border: "1px solid var(--color-outline-variant)",
+                              color: "var(--color-on-surface)",
+                              cursor: "pointer",
+                              fontFamily: "var(--font-label)",
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.1em",
+                              padding: "0.4rem 0.75rem",
+                              borderRadius: "4px",
+                            }}
+                          >
+                            Cancel Edit
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", fontSize: "0.75rem", color: "var(--color-outline)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
@@ -1162,6 +1242,27 @@ const PostContract = () => {
                           </span>
                           <button
                             type="button"
+                            onClick={() => startEditMilestone(milestone)}
+                            style={{
+                              marginTop: "0.75rem",
+                              background: "transparent",
+                              border: "1px solid var(--color-outline-variant)",
+                              color: "var(--color-on-surface)",
+                              cursor: "pointer",
+                              fontSize: "0.75rem",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.1em",
+                              fontFamily: "var(--font-label)",
+                              fontWeight: 700,
+                              padding: "0.35rem 0.75rem",
+                              borderRadius: "4px",
+                              marginRight: "0.5rem",
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => removeMilestone(milestone.id)}
                             style={{
                               marginTop: "0.75rem",
@@ -1191,7 +1292,7 @@ const PostContract = () => {
                       <input
                         type="number"
                         min="1"
-                        max={remainingBudget || undefined}
+                        max={editingMilestoneId ? editRemainingBudget || undefined : remainingBudget || undefined}
                         value={milestoneDraft.amount}
                         onChange={(e) => setMilestoneDraft((prev) => ({ ...prev, amount: e.target.value }))}
                         placeholder="Amount"
@@ -1205,7 +1306,7 @@ const PostContract = () => {
                       />
                     </div>
                     <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--color-outline)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                      Remaining budget: ${remainingBudget.toLocaleString()}
+                      Remaining budget: ${(editingMilestoneId ? editRemainingBudget : remainingBudget).toLocaleString()}
                     </p>
                     <div
                       style={{
@@ -1225,7 +1326,7 @@ const PostContract = () => {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        Market Match Strength
+                        Milestone Budget Coverage
                       </span>
                       <div
                         style={{
@@ -1242,7 +1343,7 @@ const PostContract = () => {
                             height: "100%",
                             background:
                               "linear-gradient(to right, var(--color-secondary), var(--color-primary))",
-                            width: `${matchStrength}%`,
+                            width: `${milestoneCoveragePercent}%`,
                           }}
                         />
                       </div>
@@ -1254,7 +1355,7 @@ const PostContract = () => {
                           color: "var(--color-primary)",
                         }}
                       >
-                        {matchStrength}%
+                        {milestoneCoveragePercent}%
                       </span>
                     </div>
                   </div>

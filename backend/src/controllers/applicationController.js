@@ -31,9 +31,51 @@ const createApplication = async (req, res) => {
 
 const getApplications = async (req, res) => {
     try {
+        const userId = req.user.userId;
+        const role = req.user.role;
+        let whereClause = {};
+        let contractScope = {};
+
+        if (role === 'CLIENT') {
+            const client = await prisma.client.findUnique({
+                where: { userID: userId },
+                select: { clientID: true }
+            });
+
+            if (!client) {
+                return res.status(404).json({ success: false, message: 'Client profile not found' });
+            }
+
+            whereClause = { contracts: { some: { clientID: client.clientID } } };
+            contractScope = { clientID: client.clientID };
+        }
+
+        if (role === 'DEVELOPER') {
+            const developer = await prisma.developer.findUnique({
+                where: { userID: userId },
+                select: { developerID: true }
+            });
+
+            if (!developer) {
+                return res.status(404).json({ success: false, message: 'Developer profile not found' });
+            }
+
+            whereClause = {
+                contracts: {
+                    some: { assignments: { some: { developerID: developer.developerID } } }
+                }
+            };
+            contractScope = {
+                assignments: { some: { developerID: developer.developerID } }
+            };
+        }
+
         const apps = await prisma.application.findMany({
+            where: whereClause,
             include: {
-                contracts: true
+                contracts: {
+                    where: contractScope
+                }
             }
         });
 
@@ -55,11 +97,48 @@ const getApplications = async (req, res) => {
 const getApplicationById = async (req, res) => {
     try {
         const { id } = req.params;
+        const userId = req.user.userId;
+        const role = req.user.role;
+        let accessClause = {};
+        let contractScope = {};
 
-        const app = await prisma.application.findUnique({
-            where: { appID: id },
+        if (role === 'CLIENT') {
+            const client = await prisma.client.findUnique({
+                where: { userID: userId },
+                select: { clientID: true }
+            });
+
+            if (!client) {
+                return res.status(404).json({ success: false, message: 'Client profile not found' });
+            }
+
+            accessClause = { contracts: { some: { clientID: client.clientID } } };
+            contractScope = { clientID: client.clientID };
+        }
+
+        if (role === 'DEVELOPER') {
+            const developer = await prisma.developer.findUnique({
+                where: { userID: userId },
+                select: { developerID: true }
+            });
+
+            if (!developer) {
+                return res.status(404).json({ success: false, message: 'Developer profile not found' });
+            }
+
+            accessClause = {
+                contracts: {
+                    some: { assignments: { some: { developerID: developer.developerID } } }
+                }
+            };
+            contractScope = { assignments: { some: { developerID: developer.developerID } } };
+        }
+
+        const app = await prisma.application.findFirst({
+            where: { appID: id, ...accessClause },
             include: {
                 contracts: {
+                    where: contractScope,
                     include: {
                         client: true,
                         assignments: true,
@@ -95,6 +174,24 @@ const updateApplication = async (req, res) => {
     try {
         const { id } = req.params;
         const { appName, appType, description, currentVersion } = req.body;
+        const userId = req.user.userId;
+
+        const client = await prisma.client.findUnique({
+            where: { userID: userId },
+            select: { clientID: true }
+        });
+
+        if (!client) {
+            return res.status(404).json({ success: false, message: 'Client profile not found' });
+        }
+
+        const ownsApp = await prisma.projectContract.findFirst({
+            where: { appID: id, clientID: client.clientID }
+        });
+
+        if (!ownsApp) {
+            return res.status(403).json({ success: false, message: 'Forbidden' });
+        }
 
         const updated = await prisma.application.update({
             where: { appID: id },
@@ -132,6 +229,24 @@ const updateApplication = async (req, res) => {
 const deleteApplication = async (req, res) => {
     try {
         const { id } = req.params;
+        const userId = req.user.userId;
+
+        const client = await prisma.client.findUnique({
+            where: { userID: userId },
+            select: { clientID: true }
+        });
+
+        if (!client) {
+            return res.status(404).json({ success: false, message: 'Client profile not found' });
+        }
+
+        const ownsApp = await prisma.projectContract.findFirst({
+            where: { appID: id, clientID: client.clientID }
+        });
+
+        if (!ownsApp) {
+            return res.status(403).json({ success: false, message: 'Forbidden' });
+        }
 
         const contractExists = await prisma.projectContract.findFirst({
             where: { appID: id }

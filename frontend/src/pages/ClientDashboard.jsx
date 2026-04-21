@@ -1,9 +1,10 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Footer from "../components/layout/Footer";
 import DashboardHeader from "../components/ui/DashboardHeader";
 import ManageApplicationsModal from "../components/ui/ManageApplicationsModal";
+import ConfirmDialog from "../components/ui/ConfirmDialog";
 import { useAuth } from "../context/AuthContext";
 import { contractService } from "../api/services/contractService";
 import { statsService } from "../api/services/statsService";
@@ -11,6 +12,7 @@ import { useToast } from "../context/ToastContext";
 
 function ClientDashboard() {
   const navigate = useNavigate();
+  const { search } = useLocation();
   const { user } = useAuth();
   const { addToast } = useToast();
   const [contracts, setContracts] = useState([]);
@@ -18,8 +20,10 @@ function ClientDashboard() {
   const [editingContract, setEditingContract] = useState(null);
   const [editForm, setEditForm] = useState({ title: "", description: "", totalAmount: "", startDate: "", endDate: "" });
   const [isUpdatingContract, setIsUpdatingContract] = useState(false);
+  const [confirmDeleteContractId, setConfirmDeleteContractId] = useState(null);
   const [stats, setStats] = useState([
     { label: "Active Contracts", value: "0", icon: "assignment" },
+    { label: "Pending Proposals", value: "0", icon: "inbox" },
     { label: "Total Budget", value: "$0", icon: "payments" },
     { label: "Milestones Pending", value: "0", icon: "flag" },
     { label: "Bugs Open", value: "0", icon: "bug_report" },
@@ -46,8 +50,16 @@ function ClientDashboard() {
       const contracts = data?.data || [];
       const s = statsRes?.data;
 
+      const pendingProposalsCount = contracts.reduce((sum, contract) => {
+        const count = (contract.proposals || []).filter(
+          (proposal) => proposal.status === "PENDING" && proposal.source === "DEVELOPER_PROPOSAL"
+        ).length;
+        return sum + count;
+      }, 0);
+
       setStats([
         { label: "Active Contracts", value: String(s?.contracts?.byStatus?.IN_PROGRESS ?? 0), icon: "assignment" },
+        { label: "Pending Proposals", value: String(pendingProposalsCount), icon: "inbox" },
         { label: "Total Budget", value: `$${Number(s?.totalAmount ?? 0).toLocaleString()}`, icon: "payments" },
         { label: "Milestones Pending", value: String(s?.milestones?.byStatus?.PENDING ?? 0), icon: "flag" },
         { label: "Bugs Open", value: String(s?.bugs?.byStatus?.REPORTED ?? 0), icon: "bug_report" },
@@ -64,6 +76,34 @@ function ClientDashboard() {
   useEffect(() => {
     fetchContracts();
   }, []);
+
+  const pendingProposals = contracts
+    .flatMap((contract) => (contract.proposals || []).map((proposal) => ({
+      contract,
+      proposal,
+    })))
+    .filter(({ proposal }) => proposal.status === "PENDING" && proposal.source === "DEVELOPER_PROPOSAL")
+    .sort((a, b) => new Date(b.proposal.createdAt) - new Date(a.proposal.createdAt));
+
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const contractId = params.get("contract");
+    if (!contractId || selectedContract) return;
+    const match = contracts.find((contract) => contract.contractID === contractId);
+    if (match) setSelectedContract(match);
+  }, [search, contracts, selectedContract]);
+
+  const handleDeleteContract = async () => {
+    if (!confirmDeleteContractId) return;
+    try {
+      await contractService.deleteContract(confirmDeleteContractId);
+      await fetchContracts();
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to delete contract.", "error");
+    } finally {
+      setConfirmDeleteContractId(null);
+    }
+  };
 
   return (
     <div
@@ -137,6 +177,15 @@ function ClientDashboard() {
           </div>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={Boolean(confirmDeleteContractId)}
+        title="Delete contract"
+        message="This will permanently delete the contract and all associated data. This action cannot be undone."
+        confirmLabel="Delete"
+        tone="danger"
+        onConfirm={handleDeleteContract}
+        onCancel={() => setConfirmDeleteContractId(null)}
+      />
       <main
         className="sidebar-layout-main"
         style={{
@@ -516,7 +565,18 @@ function ClientDashboard() {
                     </td>
                     <td style={{ padding: "1.75rem 2rem", textAlign: "right" }}>
                       {contract.status === "DRAFT" ? (
-                        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+                        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                          {((contract.proposals || []).filter((proposal) => proposal.status === "PENDING" && proposal.source === "DEVELOPER_PROPOSAL").length > 0) ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedContract(contract);
+                              }}
+                              style={{ border: "1px solid var(--color-primary-container)", background: "var(--color-primary-container)", color: "var(--color-on-primary-container)", borderRadius: "4px", padding: "0.4rem 0.7rem", cursor: "pointer" }}
+                            >
+                              Review
+                            </button>
+                          ) : null}
                           <button
                             onClick={async (e) => {
                               e.stopPropagation();
@@ -536,9 +596,7 @@ function ClientDashboard() {
                           <button
                             onClick={async (e) => {
                               e.stopPropagation();
-                              if (!window.confirm("Delete this open contract?")) return;
-                              await contractService.deleteContract(contract.contractID);
-                              await fetchContracts();
+                              setConfirmDeleteContractId(contract.contractID);
                             }}
                             style={{ border: "1px solid var(--color-error)", background: "transparent", color: "var(--color-error)", borderRadius: "4px", padding: "0.4rem 0.7rem", cursor: "pointer" }}
                           >

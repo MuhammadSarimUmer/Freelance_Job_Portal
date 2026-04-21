@@ -35,30 +35,34 @@ function JobApplyModal({ job, onClose, onSubmitted }) {
     (proposal) => proposal.developer?.userID === user?.userID || proposal.developer?.user?.email === user?.email,
   );
 
-  const requireCompleteProfile = () => {
-    const missing = [];
+  const getProfileGateStatus = () => {
+    const missingRequired = [];
+    const missingOptional = [];
 
-    if (!user?.phoneNumber) missing.push("contact number");
-    if (!user?.developer?.cvUrl) missing.push("CV");
-    if (!user?.developer?.hourlyRate || Number(user.developer.hourlyRate) <= 0) missing.push("hourly rate");
-    if ((user?.developer?.knownTechs?.length || 0) === 0) missing.push("skills");
+    if (!user?.developer?.cvUrl) missingRequired.push("CV");
+    if (!user?.phoneNumber) missingOptional.push("contact number");
+    if (!user?.developer?.hourlyRate || Number(user.developer.hourlyRate) <= 0) missingOptional.push("hourly rate");
+    if ((user?.developer?.knownTechs?.length || 0) === 0) missingOptional.push("skills");
 
-    if (missing.length > 0) {
-      addToast(`Complete your profile before applying: ${missing.join(", ")}.`, "error");
-      navigate("/settings");
-      return false;
-    }
-
-    return true;
+    return { missingRequired, missingOptional };
   };
 
-  const handleSubmitProposal = async () => {
+  const submitProposal = async ({ ignoreProfileGate = false } = {}) => {
     try {
-      if (!requireCompleteProfile()) return;
+      const { missingRequired, missingOptional } = getProfileGateStatus();
+      if (missingRequired.length > 0) {
+        addToast("Upload your CV before sending a proposal.", "error");
+        return;
+      }
+      if (missingOptional.length > 0 && !ignoreProfileGate) {
+        addToast(`Complete your profile or send anyway: ${missingOptional.join(", ")}.`, "error");
+        return;
+      }
+
       setIsSubmitting(true);
-      await proposalService.createProposal(job.contractID, {
-        message,
-      });
+      const trimmedMessage = message.trim();
+      const payload = trimmedMessage ? { message: trimmedMessage } : {};
+      await proposalService.createProposal(job.contractID, payload);
       addToast("Proposal submitted successfully.", "success");
       onSubmitted?.();
       onClose();
@@ -79,6 +83,9 @@ function JobApplyModal({ job, onClose, onSubmitted }) {
     navigate("/settings");
     addToast("Keep your profile sharp — clients pick developers they can see clearly.", "info");
   };
+
+  const { missingRequired, missingOptional } = getProfileGateStatus();
+  const canSendAnyway = missingRequired.length === 0 && missingOptional.length > 0;
 
   return (
     <div
@@ -170,6 +177,78 @@ function JobApplyModal({ job, onClose, onSubmitted }) {
           </p>
         </div>
 
+        {missingRequired.length > 0 || missingOptional.length > 0 ? (
+          <div
+            style={{
+              background: "var(--color-surface-container)",
+              border: "1px dashed var(--color-outline-variant)",
+              borderRadius: "6px",
+              padding: "1rem",
+              marginBottom: "1.5rem",
+              position: "relative",
+              zIndex: 1,
+            }}
+          >
+            {missingRequired.length > 0 ? (
+              <>
+                <p style={{ margin: 0, fontFamily: "var(--font-headline)", fontSize: "0.85rem" }}>
+                  CV required to submit a proposal.
+                </p>
+                <p style={{ margin: "0.4rem 0 0", color: "var(--color-on-surface-variant)", fontSize: "0.8rem" }}>
+                  Upload your CV in profile settings to continue.
+                </p>
+              </>
+            ) : null}
+            {missingOptional.length > 0 ? (
+              <>
+                <p style={{ margin: missingRequired.length > 0 ? "0.75rem 0 0" : 0, fontFamily: "var(--font-headline)", fontSize: "0.85rem" }}>
+                  Recommended: {missingOptional.join(", ")}
+                </p>
+                <p style={{ margin: "0.4rem 0 0", color: "var(--color-on-surface-variant)", fontSize: "0.8rem" }}>
+                  You can update now, or send the proposal anyway.
+                </p>
+              </>
+            ) : null}
+            <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={handleViewSettings}
+                style={{
+                  padding: "0.6rem 1rem",
+                  background: "var(--color-surface-container-highest)",
+                  border: "1px solid var(--color-outline-variant)",
+                  color: "var(--color-on-surface)",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontFamily: "var(--font-headline)",
+                  fontWeight: 700,
+                }}
+              >
+                Complete Profile
+              </button>
+              {canSendAnyway ? (
+                <button
+                  type="button"
+                  onClick={() => submitProposal({ ignoreProfileGate: true })}
+                  disabled={isSubmitting}
+                  style={{
+                    padding: "0.6rem 1rem",
+                    background: "var(--color-primary-container)",
+                    border: "none",
+                    color: "var(--color-on-primary-container)",
+                    borderRadius: "4px",
+                    cursor: isSubmitting ? "not-allowed" : "pointer",
+                    fontFamily: "var(--font-headline)",
+                    fontWeight: 700,
+                  }}
+                >
+                  Send Anyway
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         {!proposalForMe ? (
           <div style={{ marginBottom: "2rem", position: "relative", zIndex: 1 }}>
             <label style={{ display: "block", marginBottom: "0.75rem", fontFamily: "var(--font-label)", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.15em", color: "var(--color-outline)" }}>
@@ -197,7 +276,7 @@ function JobApplyModal({ job, onClose, onSubmitted }) {
         {/* Action Buttons */}
         <div style={{ display: "flex", gap: "1rem", position: "relative", zIndex: 1, flexWrap: "wrap" }}>
           <button
-            onClick={proposalForMe ? handleViewProfile : handleSubmitProposal}
+            onClick={proposalForMe ? handleViewProfile : () => submitProposal()}
             className="signature-cta"
             style={{
               flex: 1,
@@ -212,7 +291,7 @@ function JobApplyModal({ job, onClose, onSubmitted }) {
               cursor: "pointer",
               borderRadius: "4px",
             }}
-            disabled={!proposalForMe && (isSubmitting || message.trim().length < 10)}
+            disabled={!proposalForMe && (isSubmitting || missingRequired.length > 0)}
           >
             {proposalForMe ? "View My Profile" : isSubmitting ? "Submitting..." : "Submit Proposal"}
           </button>

@@ -7,7 +7,7 @@ export const developerNav = [
   { icon: "assignment", label: "My Proposals", path: "/developer/applications" },
   { icon: "bug_report", label: "Bug Reports", path: "/bug-reports" },
   { icon: "celebration", label: "Milestones", path: "/milestones" },
-  { icon: "payments", label: "Earnings", path: "/earnings" },
+  { icon: "payments", label: "Transactions", path: "/earnings" },
   { icon: "person", label: "Profile", path: "/developer/profile" },
   { icon: "settings", label: "Settings", path: "/settings" },
 ];
@@ -19,6 +19,7 @@ export const clientNav = [
   { icon: "people", label: "Developer Directory", path: "/client/directory" },
   { icon: "bug_report", label: "Bug Reports", path: "/bug-reports" },
   { icon: "celebration", label: "Milestones", path: "/milestones" },
+  { icon: "lock", label: "Escrow", path: "/escrow" },
   { icon: "payments", label: "Earnings", path: "/earnings" },
   { icon: "settings", label: "Settings", path: "/settings" },
 ];
@@ -39,13 +40,12 @@ export const navbarLinks = [{ label: "Open Contracts", path: "/jobs" }];
 
 // ============ FOOTER DATA ============
 export const footerLinks = [
-  "Privacy Policy",
-  "Terms of Service",
-  "Cookie Policy",
-  "Support",
+  { label: "Privacy Policy", path: "/privacy" },
+  { label: "Terms of Service", path: "/terms" },
+  { label: "Support", path: "/support" },
 ];
 
-export const footerCopyright = "© 2024 Codex. All rights reserved.";
+export const footerCopyright = "© 2026 Codex. All rights reserved.";
 
 // ============ JOB LISTINGS DATA ============
 export const allJobs = [

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Footer from "../components/layout/Footer";
+import ConfirmDialog from "../components/ui/ConfirmDialog";
 import {
   milestoneFilters,
   milestoneStatusColors,
@@ -28,6 +29,7 @@ function Milestones() {
   const [isCreating, setIsCreating] = useState(false);
   const [updatingMilestoneId, setUpdatingMilestoneId] = useState(null);
   const [deletingMilestoneId, setDeletingMilestoneId] = useState(null);
+  const [confirmDeleteMilestoneId, setConfirmDeleteMilestoneId] = useState(null);
   const [editingMilestoneId, setEditingMilestoneId] = useState(null);
   const [editMilestoneForm, setEditMilestoneForm] = useState({
     title: "",
@@ -166,6 +168,22 @@ function Milestones() {
       return;
     }
 
+    const teamDeveloperIds = selectedAssignments
+      .map((assignment) => assignment.developer?.developerID)
+      .filter(Boolean);
+    const uniqueAssignees = Array.from(new Set(newMilestone.assigneeIDs.filter(Boolean)));
+
+    if (teamDeveloperIds.length > 1) {
+      if (uniqueAssignees.length === 0) {
+        addToast("Select at least one team member for this milestone.", "error");
+        return;
+      }
+      if (uniqueAssignees.length > 1 && uniqueAssignees.length !== teamDeveloperIds.length) {
+        addToast("Shared milestones must include all team members.", "error");
+        return;
+      }
+    }
+
     setIsCreating(true);
     try {
       await milestoneService.createMilestone({
@@ -174,7 +192,7 @@ function Milestones() {
         description: newMilestone.description,
         dueDate: newMilestone.dueDate,
         milestoneAmount: Number(newMilestone.milestoneAmount),
-        assigneeIDs: newMilestone.assigneeIDs,
+        assigneeIDs: uniqueAssignees,
       });
       addToast("Milestone created.", "success");
       setNewMilestone((prev) => ({
@@ -190,7 +208,9 @@ function Milestones() {
       setShowForm(false);
       await fetchMilestones();
     } catch (err) {
-      addToast(err?.response?.data?.message || "Failed to create milestone.", "error");
+      const apiMessage = err?.response?.data?.message
+        || err?.response?.data?.errors?.[0]?.msg;
+      addToast(apiMessage || "Failed to create milestone.", "error");
     } finally {
       setIsCreating(false);
     }
@@ -212,7 +232,6 @@ function Milestones() {
 
   const handleDelete = async (milestoneId) => {
     if (!milestoneId) return;
-    if (!window.confirm("Delete this milestone?")) return;
     setDeletingMilestoneId(milestoneId);
     try {
       await milestoneService.deleteMilestone(milestoneId);
@@ -222,6 +241,7 @@ function Milestones() {
       addToast(err?.response?.data?.message || "Failed to delete milestone.", "error");
     } finally {
       setDeletingMilestoneId(null);
+      setConfirmDeleteMilestoneId(null);
     }
   };
 
@@ -268,7 +288,9 @@ function Milestones() {
       setEditingMilestoneId(null);
       await fetchMilestones();
     } catch (err) {
-      addToast(err?.response?.data?.message || "Failed to update milestone.", "error");
+      const apiMessage = err?.response?.data?.message
+        || err?.response?.data?.errors?.[0]?.msg;
+      addToast(apiMessage || "Failed to update milestone.", "error");
     } finally {
       setIsSavingEdit(false);
     }
@@ -278,6 +300,35 @@ function Milestones() {
     if (activeFilter === "All") return milestonesData;
     return milestonesData.filter((m) => m.status === activeFilter);
   }, [activeFilter, milestonesData]);
+
+  const groupedMilestones = useMemo(() => {
+    const grouped = filteredMilestones.reduce((acc, milestone) => {
+      const key = milestone.contractId || milestone.contractTitle || "unassigned";
+      if (!acc[key]) {
+        acc[key] = {
+          contractId: milestone.contractId,
+          contractTitle: milestone.contractTitle || "Contract",
+          items: [],
+        };
+      }
+      acc[key].items.push(milestone);
+      return acc;
+    }, {});
+    return Object.values(grouped);
+  }, [filteredMilestones]);
+
+  const getProgressPercent = (status) => {
+    switch (status) {
+      case "Completed":
+        return 100;
+      case "In Progress":
+        return 60;
+      case "Pending":
+      case "Upcoming":
+      default:
+        return 0;
+    }
+  };
 
   // Summary stats (derived from API, in UI model)
   const totals = useMemo(() => {
@@ -724,359 +775,386 @@ function Milestones() {
             zIndex: 1,
           }}
         >
-          {filteredMilestones.map((milestone) => (
-            <div
-              key={milestone.milestoneId}
-              style={{
-                background: "var(--color-surface-container-low)",
-                borderLeft: `4px solid ${milestoneStatusColors[milestone.status].color}`,
-                padding: "2rem",
-                transition: "background 0.2s, transform 0.2s",
-                borderRadius: "8px",
-                borderTop: "1px solid var(--color-outline-variant)",
-                borderRight: "1px solid var(--color-outline-variant)",
-                borderBottom: "1px solid var(--color-outline-variant)",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--color-surface-container-high)";
-                e.currentTarget.style.transform = "translateX(4px)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "var(--color-surface-container-low)";
-                e.currentTarget.style.transform = "translateX(0)";
-              }}
-            >
+          {groupedMilestones.map((group) => (
+            <div key={group.contractId || group.contractTitle} style={{ display: "grid", gap: "1rem" }}>
               <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr auto",
-                  gap: "2rem",
-                  alignItems: "flex-start",
+                  padding: "0.85rem 1.25rem",
+                  borderRadius: "8px",
+                  background: "var(--color-surface-container-high)",
+                  border: "1px solid var(--color-outline-variant)",
                 }}
               >
-                {/* Left Info */}
-                <div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontFamily: "var(--font-headline)",
+                    fontSize: "1rem",
+                    fontWeight: 700,
+                    color: "var(--color-on-surface)",
+                  }}
+                >
+                  {group.contractTitle}
+                </p>
+                <p
+                  style={{
+                    margin: "0.3rem 0 0",
+                    color: "var(--color-outline)",
+                    fontSize: "0.7rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.12em",
+                  }}
+                >
+                  {group.contractId || "Contract"} • {group.items.length} milestone{group.items.length === 1 ? "" : "s"}
+                </p>
+              </div>
+
+              {group.items.map((milestone) => {
+                const progressPercent = getProgressPercent(milestone.status);
+                return (
                   <div
+                    key={milestone.milestoneId}
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "1rem",
-                      marginBottom: "0.75rem",
-                      flexWrap: "wrap",
+                      background: "var(--color-surface-container-low)",
+                      borderLeft: `4px solid ${milestoneStatusColors[milestone.status].color}`,
+                      padding: "2rem",
+                      transition: "background 0.2s, transform 0.2s",
+                      borderRadius: "8px",
+                      borderTop: "1px solid var(--color-outline-variant)",
+                      borderRight: "1px solid var(--color-outline-variant)",
+                      borderBottom: "1px solid var(--color-outline-variant)",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "var(--color-surface-container-high)";
+                      e.currentTarget.style.transform = "translateX(4px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "var(--color-surface-container-low)";
+                      e.currentTarget.style.transform = "translateX(0)";
                     }}
                   >
-                    <span
-                      style={{
-                        fontFamily: "var(--font-headline)",
-                        fontWeight: 700,
-                        color: "var(--color-primary)",
-                        fontSize: "0.875rem",
-                      }}
-                    >
-                      {milestone.milestoneId}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "0.7rem",
-                        color: "var(--color-outline)",
-                        fontFamily: "var(--font-body)",
-                      }}
-                    >
-                      {milestone.contractId} — {milestone.contractTitle}
-                    </span>
-                  </div>
-
-                  <h3
-                    style={{
-                      fontFamily: "var(--font-headline)",
-                      fontSize: "1.25rem",
-                      fontWeight: 700,
-                      color: "var(--color-on-surface)",
-                      marginBottom: "0.5rem",
-                    }}
-                  >
-                    {milestone.title}
-                  </h3>
-
-                  <p
-                    style={{
-                      fontSize: "0.875rem",
-                      color: "var(--color-secondary)",
-                      fontFamily: "var(--font-body)",
-                      lineHeight: 1.6,
-                      marginBottom: "1.25rem",
-                      maxWidth: "600px",
-                    }}
-                  >
-                    {milestone.description}
-                  </p>
-                  <p style={{ margin: "0 0 1rem", fontSize: "0.75rem", color: "var(--color-outline)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                    {milestone.scope} milestone{milestone.assignees?.length ? ` • ${milestone.assignees.join(", ")}` : ""}
-                  </p>
-
-                  <div
-                    style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}
-                  >
-                    {/* Due Date */}
-                    <div>
-                      <p
-                        style={{
-                          fontSize: "0.65rem",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.15em",
-                          color: "var(--color-outline)",
-                          fontFamily: "var(--font-label)",
-                          marginBottom: "0.25rem",
-                        }}
-                      >
-                        Due Date
-                      </p>
-                      <p
-                        style={{
-                          fontFamily: "var(--font-headline)",
-                          fontSize: "0.9rem",
-                          fontWeight: 600,
-                          color: "var(--color-on-surface)",
-                        }}
-                      >
-                        {milestone.dueDate}
-                      </p>
-                    </div>
-
-                    {/* Completed Date */}
-                    {milestone.completeDate && (
-                      <div>
-                        <p
-                          style={{
-                            fontSize: "0.65rem",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.15em",
-                            color: "var(--color-outline)",
-                            fontFamily: "var(--font-label)",
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          Completed
-                        </p>
-                        <p
-                          style={{
-                            fontFamily: "var(--font-headline)",
-                            fontSize: "0.9rem",
-                            fontWeight: 600,
-                            color: "#4ade80",
-                          }}
-                        >
-                          {milestone.completeDate}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Escrow Info */}
-                    <div>
-                      <p
-                        style={{
-                          fontSize: "0.65rem",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.15em",
-                          color: "var(--color-outline)",
-                          fontFamily: "var(--font-label)",
-                          marginBottom: "0.25rem",
-                        }}
-                      >
-                        Escrow Status
-                      </p>
-                      <span
-                        style={{
-                          display: "inline-block",
-                          padding: "2px 10px",
-                          background:
-                            milestoneEscrowColors[milestone.escrowStatus].bg,
-                          color:
-                            milestoneEscrowColors[milestone.escrowStatus].color,
-                          fontSize: "0.65rem",
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.1em",
-                          fontFamily: "var(--font-label)",
-                          borderRadius: "4px"
-                        }}
-                      >
-                        {milestone.escrowStatus}
-                      </span>
-                    </div>
-
-                    {/* Deposit Date */}
-                    {milestone.depositDate && (
-                      <div>
-                        <p
-                          style={{
-                            fontSize: "0.65rem",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.15em",
-                            color: "var(--color-outline)",
-                            fontFamily: "var(--font-label)",
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          Deposited
-                        </p>
-                        <p
-                          style={{
-                            fontFamily: "var(--font-headline)",
-                            fontSize: "0.9rem",
-                            fontWeight: 600,
-                            color: "var(--color-on-surface)",
-                          }}
-                        >
-                          {milestone.depositDate}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right — Amount + Status */}
-                <div style={{ textAlign: "right", minWidth: "160px" }}>
-                  <p
-                    style={{
-                      fontFamily: "var(--font-headline)",
-                      fontSize: "2rem",
-                      fontWeight: 700,
-                      color: "var(--color-primary)",
-                      lineHeight: 1,
-                      marginBottom: "0.75rem",
-                    }}
-                  >
-                    {milestone.amount}
-                  </p>
-                  <span
-                    style={{
-                      display: "inline-block",
-                      padding: "4px 14px",
-                      background: milestoneStatusColors[milestone.status].bg,
-                      color: milestoneStatusColors[milestone.status].color,
-                      fontSize: "0.65rem",
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.1em",
-                      fontFamily: "var(--font-label)",
-                      borderRadius: "4px"
-                    }}
-                  >
-                    {milestone.status}
-                  </span>
-
-                  <div style={{ marginTop: "0.75rem", display: "grid", gap: "0.5rem", justifyItems: "end" }}>
-                    <select
-                      value={milestone.status}
-                      onChange={(e) => handleUpdateStatus(milestone.milestoneId, e.target.value)}
-                      disabled={updatingMilestoneId === milestone.milestoneId}
-                      style={{
-                        background: "var(--color-surface)",
-                        color: "var(--color-on-surface)",
-                        border: "1px solid var(--color-outline-variant)",
-                        borderRadius: "4px",
-                        padding: "4px 8px",
-                        fontSize: "0.7rem",
-                        fontFamily: "var(--font-label)",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.08em",
-                      }}
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="In Progress">In Progress</option>
-                      <option value="Upcoming">Upcoming</option>
-                      <option value="Completed">Completed</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(milestone.milestoneId)}
-                      disabled={deletingMilestoneId === milestone.milestoneId}
-                      style={{
-                        background: "transparent",
-                        border: "none",
-                        color: "var(--color-error)",
-                        cursor: deletingMilestoneId === milestone.milestoneId ? "not-allowed" : "pointer",
-                        fontFamily: "var(--font-headline)",
-                        fontSize: "0.75rem",
-                      }}
-                    >
-                      {deletingMilestoneId === milestone.milestoneId ? "Deleting..." : "Delete"}
-                    </button>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div style={{ marginTop: "1.5rem" }}>
                     <div
                       style={{
-                        height: "4px",
-                        background: "var(--color-surface-container-highest)",
-                        width: "100%",
-                        minWidth: "160px",
-                        overflow: "hidden",
-                        borderRadius: "2px"
+                        display: "grid",
+                        gridTemplateColumns: "1fr auto",
+                        gap: "2rem",
+                        alignItems: "flex-start",
                       }}
                     >
-                      <div
-                        style={{
-                          height: "100%",
-                          transition: "width 0.4s ease",
-                          background:
-                            milestoneStatusColors[milestone.status].color,
-                          width:
-                            milestone.status === "Completed"
-                              ? "100%"
-                              : milestone.status === "In Progress"
-                                ? "60%"
-                                : milestone.status === "Pending"
-                                  ? "20%"
-                                  : "0%",
-                        }}
-                      />
-                    </div>
-                    <p
-                      style={{
-                        fontSize: "0.65rem",
-                        color: "var(--color-outline)",
-                        fontFamily: "var(--font-label)",
-                        marginTop: "0.5rem",
-                        textAlign: "right",
-                      }}
-                    >
-                      {milestone.status === "Completed"
-                        ? "100%"
-                        : milestone.status === "In Progress"
-                          ? "60%"
-                          : milestone.status === "Pending"
-                            ? "20%"
-                            : "0%"}{" "}
-                      complete
-                    </p>
-                  </div>
-                </div>
+                      {/* Left Info */}
+                      <div>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "1rem",
+                            marginBottom: "0.75rem",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontFamily: "var(--font-headline)",
+                              fontWeight: 700,
+                              color: "var(--color-primary)",
+                              fontSize: "0.875rem",
+                            }}
+                          >
+                            {milestone.milestoneId}
+                          </span>
+                        </div>
 
-                <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginTop: "1.5rem" }}>
-                  <button
-                    type="button"
-                    onClick={() => openEditMilestone(milestone.milestoneId)}
-                    style={{
-                      background: "transparent",
-                      color: "var(--color-secondary)",
-                      border: "1px solid var(--color-outline-variant)",
-                      borderRadius: "4px",
-                      padding: "0.35rem 0.75rem",
-                      cursor: "pointer",
-                      fontSize: "0.75rem",
-                      fontFamily: "var(--font-headline)",
-                    }}
-                  >
-                    Edit
-                  </button>
-                </div>
-              </div>
+                        <h3
+                          style={{
+                            fontFamily: "var(--font-headline)",
+                            fontSize: "1.25rem",
+                            fontWeight: 700,
+                            color: "var(--color-on-surface)",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          {milestone.title}
+                        </h3>
+
+                        <p
+                          style={{
+                            fontSize: "0.875rem",
+                            color: "var(--color-secondary)",
+                            fontFamily: "var(--font-body)",
+                            lineHeight: 1.6,
+                            marginBottom: "1.25rem",
+                            maxWidth: "600px",
+                          }}
+                        >
+                          {milestone.description}
+                        </p>
+                        <p style={{ margin: "0 0 1rem", fontSize: "0.75rem", color: "var(--color-outline)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                          {milestone.scope} milestone{milestone.assignees?.length ? ` • ${milestone.assignees.join(", ")}` : ""}
+                        </p>
+
+                        <div
+                          style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}
+                        >
+                          {/* Due Date */}
+                          <div>
+                            <p
+                              style={{
+                                fontSize: "0.65rem",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.15em",
+                                color: "var(--color-outline)",
+                                fontFamily: "var(--font-label)",
+                                marginBottom: "0.25rem",
+                              }}
+                            >
+                              Due Date
+                            </p>
+                            <p
+                              style={{
+                                fontFamily: "var(--font-headline)",
+                                fontSize: "0.9rem",
+                                fontWeight: 600,
+                                color: "var(--color-on-surface)",
+                              }}
+                            >
+                              {milestone.dueDate}
+                            </p>
+                          </div>
+
+                          {/* Completed Date */}
+                          {milestone.completeDate && (
+                            <div>
+                              <p
+                                style={{
+                                  fontSize: "0.65rem",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.15em",
+                                  color: "var(--color-outline)",
+                                  fontFamily: "var(--font-label)",
+                                  marginBottom: "0.25rem",
+                                }}
+                              >
+                                Completed
+                              </p>
+                              <p
+                                style={{
+                                  fontFamily: "var(--font-headline)",
+                                  fontSize: "0.9rem",
+                                  fontWeight: 600,
+                                  color: "#4ade80",
+                                }}
+                              >
+                                {milestone.completeDate}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Escrow Info */}
+                          <div>
+                            <p
+                              style={{
+                                fontSize: "0.65rem",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.15em",
+                                color: "var(--color-outline)",
+                                fontFamily: "var(--font-label)",
+                                marginBottom: "0.25rem",
+                              }}
+                            >
+                              Escrow Status
+                            </p>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "2px 10px",
+                                background:
+                                  milestoneEscrowColors[milestone.escrowStatus].bg,
+                                color:
+                                  milestoneEscrowColors[milestone.escrowStatus].color,
+                                fontSize: "0.65rem",
+                                fontWeight: 700,
+                                textTransform: "uppercase",
+                                letterSpacing: "0.1em",
+                                fontFamily: "var(--font-label)",
+                                borderRadius: "4px"
+                              }}
+                            >
+                              {milestone.escrowStatus}
+                            </span>
+                          </div>
+
+                          {/* Deposit Date */}
+                          {milestone.depositDate && (
+                            <div>
+                              <p
+                                style={{
+                                  fontSize: "0.65rem",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.15em",
+                                  color: "var(--color-outline)",
+                                  fontFamily: "var(--font-label)",
+                                  marginBottom: "0.25rem",
+                                }}
+                              >
+                                Deposited
+                              </p>
+                              <p
+                                style={{
+                                  fontFamily: "var(--font-headline)",
+                                  fontSize: "0.9rem",
+                                  fontWeight: 600,
+                                  color: "var(--color-on-surface)",
+                                }}
+                              >
+                                {milestone.depositDate}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right — Amount + Status */}
+                      <div style={{ textAlign: "right", minWidth: "160px" }}>
+                        <p
+                          style={{
+                            fontFamily: "var(--font-headline)",
+                            fontSize: "2rem",
+                            fontWeight: 700,
+                            color: "var(--color-primary)",
+                            lineHeight: 1,
+                            marginBottom: "0.75rem",
+                          }}
+                        >
+                          {milestone.amount}
+                        </p>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "4px 14px",
+                            background: milestoneStatusColors[milestone.status].bg,
+                            color: milestoneStatusColors[milestone.status].color,
+                            fontSize: "0.65rem",
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.1em",
+                            fontFamily: "var(--font-label)",
+                            borderRadius: "4px"
+                          }}
+                        >
+                          {milestone.status}
+                        </span>
+
+                        <div style={{ marginTop: "0.75rem", display: "grid", gap: "0.5rem", justifyItems: "end" }}>
+                          <select
+                            value={milestone.status}
+                            onChange={(e) => handleUpdateStatus(milestone.milestoneId, e.target.value)}
+                            disabled={updatingMilestoneId === milestone.milestoneId}
+                            style={{
+                              background: "var(--color-surface)",
+                              color: "var(--color-on-surface)",
+                              border: "1px solid var(--color-outline-variant)",
+                              borderRadius: "4px",
+                              padding: "4px 8px",
+                              fontSize: "0.7rem",
+                              fontFamily: "var(--font-label)",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.08em",
+                            }}
+                          >
+                            <option value="Pending">Pending</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Upcoming">Upcoming</option>
+                            <option value="Completed">Completed</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteMilestoneId(milestone.milestoneId)}
+                            disabled={deletingMilestoneId === milestone.milestoneId}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: "var(--color-error)",
+                              cursor: deletingMilestoneId === milestone.milestoneId ? "not-allowed" : "pointer",
+                              fontFamily: "var(--font-headline)",
+                              fontSize: "0.75rem",
+                            }}
+                          >
+                            {deletingMilestoneId === milestone.milestoneId ? "Deleting..." : "Delete"}
+                          </button>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div style={{ marginTop: "1.5rem" }}>
+                          <div
+                            style={{
+                              height: "4px",
+                              background: "var(--color-surface-container-highest)",
+                              width: "100%",
+                              minWidth: "160px",
+                              overflow: "hidden",
+                              borderRadius: "2px"
+                            }}
+                          >
+                            <div
+                              style={{
+                                height: "100%",
+                                transition: "width 0.4s ease",
+                                background:
+                                  milestoneStatusColors[milestone.status].color,
+                                width: `${progressPercent}%`,
+                              }}
+                            />
+                          </div>
+                          <p
+                            style={{
+                              fontSize: "0.65rem",
+                              color: "var(--color-outline)",
+                              fontFamily: "var(--font-label)",
+                              marginTop: "0.5rem",
+                              textAlign: "right",
+                            }}
+                          >
+                            {progressPercent}% complete
+                          </p>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginTop: "1.5rem" }}>
+                        <button
+                          type="button"
+                          onClick={() => openEditMilestone(milestone.milestoneId)}
+                          style={{
+                            background: "var(--color-surface-container-highest)",
+                            color: "var(--color-on-surface)",
+                            border: "1px solid var(--color-outline-variant)",
+                            borderRadius: "6px",
+                            padding: "0.6rem 1.1rem",
+                            cursor: "pointer",
+                            fontSize: "0.85rem",
+                            fontFamily: "var(--font-headline)",
+                            fontWeight: 700,
+                          }}
+                        >
+                          Edit Milestone
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ))}
         </section>
+
+        <ConfirmDialog
+          open={Boolean(confirmDeleteMilestoneId)}
+          title="Delete milestone"
+          message="This will permanently remove the milestone and its escrow history. This action cannot be undone."
+          confirmLabel="Delete"
+          tone="danger"
+          onConfirm={() => handleDelete(confirmDeleteMilestoneId)}
+          onCancel={() => setConfirmDeleteMilestoneId(null)}
+        />
 
         <div style={{ marginTop: "4rem" }}>
           <Footer />

@@ -4,9 +4,7 @@ import Sidebar from "../components/layout/Sidebar";
 import { contractService } from "../api/services/contractService";
 import { milestoneService } from "../api/services/milestoneService";
 import { bugService } from "../api/services/bugService";
-import { escrowService } from "../api/services/escrowService";
 import { useAuth } from "../context/AuthContext";
-import EscrowModal from "../components/ui/EscrowModal";
 import ContractChat from "../components/ui/ContractChat";
 import ReviewModal from "../components/ui/ReviewModal";
 import DisputeModal from "../components/ui/DisputeModal";
@@ -15,6 +13,7 @@ import { reviewService } from "../api/services/reviewService";
 import { disputeService } from "../api/services/disputeService";
 import { profileService } from "../api/services/profileService";
 import { useToast } from "../context/ToastContext";
+import ConfirmDialog from "../components/ui/ConfirmDialog";
 
 function ContractWorkspace() {
   const { id } = useParams();
@@ -24,8 +23,6 @@ function ContractWorkspace() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [activeTab, setActiveTab] = useState("milestones");
-  const [escrowModalOpen, setEscrowModalOpen] = useState(false);
-  const [escrowMilestoneId, setEscrowMilestoneId] = useState("");
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [existingReviews, setExistingReviews] = useState([]);
   const [isFetchingReview, setIsFetchingReview] = useState(false);
@@ -55,8 +52,10 @@ function ContractWorkspace() {
   const [deletingBugId, setDeletingBugId] = useState(null);
   const [updatingMilestoneId, setUpdatingMilestoneId] = useState(null);
   const [deletingMilestoneId, setDeletingMilestoneId] = useState(null);
-  const [refundingEscrowId, setRefundingEscrowId] = useState(null);
+  const [confirmDeleteMilestoneId, setConfirmDeleteMilestoneId] = useState(null);
   const [developerOptions, setDeveloperOptions] = useState([]);
+  const [confirmDeleteBugId, setConfirmDeleteBugId] = useState(null);
+  const [confirmRemoveAssignmentId, setConfirmRemoveAssignmentId] = useState(null);
   const [requestingLeaveId, setRequestingLeaveId] = useState(null);
   const [assignForm, setAssignForm] = useState({
     developerID: "",
@@ -268,20 +267,27 @@ function ContractWorkspace() {
     }
   };
 
-  const openEscrowForMilestone = (milestoneId) => {
-    if (!milestoneId) {
-      addToast("Select a milestone to fund escrow.", "error");
-      return;
-    }
-    setEscrowMilestoneId(milestoneId);
-    setEscrowModalOpen(true);
-  };
-
   const handleCreateMilestone = async () => {
     if (!contract?.contractID) return;
     if (!newMilestone.title || !newMilestone.dueDate || !newMilestone.milestoneAmount) {
       addToast("Provide title, due date, and amount.", "error");
       return;
+    }
+
+    const teamDeveloperIds = assignments
+      .map((assignment) => assignment.developer?.developerID)
+      .filter(Boolean);
+    const uniqueAssignees = Array.from(new Set(newMilestone.assigneeIDs.filter(Boolean)));
+
+    if (teamDeveloperIds.length > 1) {
+      if (uniqueAssignees.length === 0) {
+        addToast("Select at least one team member for this milestone.", "error");
+        return;
+      }
+      if (uniqueAssignees.length > 1 && uniqueAssignees.length !== teamDeveloperIds.length) {
+        addToast("Shared milestones must include all team members.", "error");
+        return;
+      }
     }
 
     setIsCreatingMilestone(true);
@@ -292,7 +298,7 @@ function ContractWorkspace() {
         description: newMilestone.description,
         dueDate: newMilestone.dueDate,
         milestoneAmount: Number(newMilestone.milestoneAmount),
-        assigneeIDs: newMilestone.assigneeIDs,
+        assigneeIDs: uniqueAssignees,
       });
       setNewMilestone({
         title: "",
@@ -306,7 +312,9 @@ function ContractWorkspace() {
       await fetchContractDetails();
       addToast("Milestone created.", "success");
     } catch (err) {
-      addToast(err?.response?.data?.message || "Failed to create milestone.", "error");
+      const apiMessage = err?.response?.data?.message
+        || err?.response?.data?.errors?.[0]?.msg;
+      addToast(apiMessage || "Failed to create milestone.", "error");
     } finally {
       setIsCreatingMilestone(false);
     }
@@ -328,7 +336,6 @@ function ContractWorkspace() {
 
   const handleDeleteMilestone = async (milestoneId) => {
     if (!milestoneId) return;
-    if (!window.confirm("Delete this milestone?")) return;
     setDeletingMilestoneId(milestoneId);
     try {
       await milestoneService.deleteMilestone(milestoneId);
@@ -338,31 +345,7 @@ function ContractWorkspace() {
       addToast(err?.response?.data?.message || "Failed to delete milestone.", "error");
     } finally {
       setDeletingMilestoneId(null);
-    }
-  };
-
-  const handleReleaseEscrow = async (escrowId) => {
-    if (!escrowId) return;
-    try {
-      await escrowService.releaseEscrow(escrowId);
-      await fetchContractDetails();
-      addToast("Escrow released.", "success");
-    } catch (err) {
-      addToast(err?.response?.data?.message || "Failed to release escrow.", "error");
-    }
-  };
-
-  const handleRefundEscrow = async (escrowId) => {
-    if (!escrowId) return;
-    setRefundingEscrowId(escrowId);
-    try {
-      await escrowService.refundEscrow(escrowId);
-      await fetchContractDetails();
-      addToast("Escrow refunded.", "success");
-    } catch (err) {
-      addToast(err?.response?.data?.message || "Failed to refund escrow.", "error");
-    } finally {
-      setRefundingEscrowId(null);
+      setConfirmDeleteMilestoneId(null);
     }
   };
 
@@ -406,7 +389,6 @@ function ContractWorkspace() {
 
   const handleDeleteBug = async (bugId) => {
     if (!bugId) return;
-    if (!window.confirm("Delete this bug report?")) return;
     setDeletingBugId(bugId);
     try {
       await bugService.deleteBug(bugId);
@@ -416,6 +398,7 @@ function ContractWorkspace() {
       addToast(err?.response?.data?.message || "Failed to delete bug.", "error");
     } finally {
       setDeletingBugId(null);
+      setConfirmDeleteBugId(null);
     }
   };
 
@@ -512,6 +495,18 @@ function ContractWorkspace() {
     }
   };
 
+  const handleRemoveTeamMember = async (assignmentId) => {
+    if (!assignmentId) return;
+    try {
+      await contractService.removeTeamMember(assignmentId);
+      await fetchContractDetails();
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to remove team member.", "error");
+    } finally {
+      setConfirmRemoveAssignmentId(null);
+    }
+  };
+
   const handleResolveDispute = async (disputeId) => {
     const payload = disputeEdits[disputeId];
     if (!payload?.status) {
@@ -588,6 +583,53 @@ function ContractWorkspace() {
           letter-spacing: 0.02em;
           box-shadow: 0 10px 20px rgba(0,0,0,0.25);
         }
+        .escrow-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.6rem;
+          align-items: center;
+          padding: 0.6rem 0.75rem;
+          border-radius: 8px;
+          background: var(--color-surface-container-high);
+          border: 1px dashed var(--color-outline-variant);
+        }
+        .escrow-actions-label {
+          font-size: 0.65rem;
+          text-transform: uppercase;
+          letter-spacing: 0.18em;
+          font-weight: 700;
+          color: var(--color-secondary);
+          margin-right: 0.35rem;
+        }
+        .escrow-action {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          padding: 0.45rem 0.9rem;
+          border-radius: 6px;
+          font-family: var(--font-headline);
+          font-weight: 600;
+          border: 1px solid var(--color-outline-variant);
+          background: var(--color-surface-container-highest);
+          color: var(--color-on-surface);
+          cursor: pointer;
+          box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+        }
+        .escrow-action.release {
+          background: linear-gradient(135deg, var(--color-secondary), var(--color-surface-container-highest));
+          color: var(--color-on-secondary);
+          border: none;
+        }
+        .escrow-action.refund {
+          border: 1px solid var(--color-error);
+          color: var(--color-error);
+          background: transparent;
+        }
+        .escrow-action:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          box-shadow: none;
+        }
         .escrow-pill {
           display: inline-flex;
           align-items: center;
@@ -602,15 +644,11 @@ function ContractWorkspace() {
         }
       `}</style>
       
-      <Sidebar activePage="Contracts" role={user?.role?.toLowerCase() || "developer"} />
+      <Sidebar
+        activePage={isClient ? "Applications" : "My Proposals"}
+        role={user?.role?.toLowerCase() || "developer"}
+      />
       
-      {escrowModalOpen && (
-        <EscrowModal
-          milestoneId={escrowMilestoneId}
-          onClose={() => setEscrowModalOpen(false)}
-        />
-      )}
-
       {reviewModalOpen && contract && (
         <ReviewModal
           contract={contract}
@@ -628,6 +666,36 @@ function ContractWorkspace() {
           onSubmitted={fetchDisputes}
         />
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmDeleteMilestoneId)}
+        title="Delete milestone"
+        message="This will permanently remove the milestone and any escrow history. This action cannot be undone."
+        confirmLabel="Delete"
+        tone="danger"
+        onConfirm={() => handleDeleteMilestone(confirmDeleteMilestoneId)}
+        onCancel={() => setConfirmDeleteMilestoneId(null)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmDeleteBugId)}
+        title="Delete bug report"
+        message="This will permanently remove the bug report. This action cannot be undone."
+        confirmLabel="Delete"
+        tone="danger"
+        onConfirm={() => handleDeleteBug(confirmDeleteBugId)}
+        onCancel={() => setConfirmDeleteBugId(null)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmRemoveAssignmentId)}
+        title="Remove developer"
+        message="This will remove the developer from the contract team. Continue?"
+        confirmLabel="Remove"
+        tone="danger"
+        onConfirm={() => handleRemoveTeamMember(confirmRemoveAssignmentId)}
+        onCancel={() => setConfirmRemoveAssignmentId(null)}
+      />
 
       <main className="sidebar-layout-main" style={{ marginLeft: "256px", flex: 1, padding: "calc(96px + 3rem) 3rem 3rem 3rem" }}>
         
@@ -668,7 +736,7 @@ function ContractWorkspace() {
                   >
                     {isPublishing ? "Publishing..." : "Publish Contract"}
                   </button>
-                ) : null}
+                              onClick={() => setConfirmDeleteBugId(bug.bugID)}
                 {canLeaveReview ? (
                   <button
                     type="button"
@@ -809,9 +877,11 @@ function ContractWorkspace() {
                             minWidth: 220,
                           }}
                         >
-                          <option value="">Select technology</option>
+                          <option value="" style={{ color: "#111", background: "#fff" }}>
+                            Select technology
+                          </option>
                           {techOptions.map((opt) => (
-                            <option key={opt.techID} value={opt.techID}>
+                            <option key={opt.techID} value={opt.techID} style={{ color: "#111", background: "#fff" }}>
                               {opt.techName}
                             </option>
                           ))}
@@ -914,7 +984,6 @@ function ContractWorkspace() {
                   {contract.milestones?.length > 0 ? (
                     <div style={{ display: "grid", gap: "1rem" }}>
                       {contract.milestones.map((m) => {
-                        const escrowId = m.escrow?.escrowID;
                         const escrowStatus = m.escrow?.paymentStatus || "NOT_FUNDED";
                         const escrowLabelMap = {
                           NOT_FUNDED: "Not funded",
@@ -978,44 +1047,23 @@ function ContractWorkspace() {
                                 </select>
                               </div>
                             </div>
-                            <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
+                            <div style={{ marginTop: "0.9rem" }}>
                               {user?.role === "CLIENT" ? (
-                                <button
-                                  type="button"
-                                  onClick={() => openEscrowForMilestone(m.milestoneID)}
-                                  className="escrow-cta"
-                                >
-                                  Fund Escrow (Simulated)
-                                </button>
-                              ) : null}
-                              {user?.role === "CLIENT" && escrowId ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleReleaseEscrow(escrowId)}
-                                  style={{ background: "transparent", color: "var(--color-secondary)", border: "1px solid var(--color-outline-variant)", borderRadius: 4, padding: "0.4rem 0.75rem", cursor: "pointer" }}
-                                >
-                                  Release
-                                </button>
-                              ) : null}
-                              {user?.role === "CLIENT" && escrowId && m.escrow?.paymentStatus !== "RELEASED" ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleRefundEscrow(escrowId)}
-                                  disabled={refundingEscrowId === escrowId}
-                                  style={{ background: "transparent", color: "var(--color-error)", border: "1px solid var(--color-outline-variant)", borderRadius: 4, padding: "0.4rem 0.75rem", cursor: refundingEscrowId === escrowId ? "not-allowed" : "pointer" }}
-                                >
-                                  {refundingEscrowId === escrowId ? "Refunding..." : "Refund"}
-                                </button>
-                              ) : null}
-                              {user?.role === "CLIENT" ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteMilestone(m.milestoneID)}
-                                  disabled={deletingMilestoneId === m.milestoneID}
-                                  style={{ background: "none", border: "none", color: "var(--color-error)", cursor: deletingMilestoneId === m.milestoneID ? "not-allowed" : "pointer" }}
-                                >
-                                  {deletingMilestoneId === m.milestoneID ? "Deleting..." : "Delete"}
-                                </button>
+                                <div className="escrow-actions">
+                                  <span className="escrow-actions-label">Escrow actions</span>
+                                  <span style={{ color: "var(--color-on-surface-variant)", fontSize: "0.8rem" }}>
+                                    Fund, release, and refund from the Escrow page.
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteMilestoneId(m.milestoneID)}
+                                    disabled={deletingMilestoneId === m.milestoneID}
+                                    className="escrow-action"
+                                    style={{ color: "var(--color-error)", borderColor: "var(--color-error)" }}
+                                  >
+                                    {deletingMilestoneId === m.milestoneID ? "Deleting..." : "Delete"}
+                                  </button>
+                                </div>
                               ) : null}
                             </div>
                           </div>
@@ -1187,15 +1235,9 @@ function ContractWorkspace() {
                               {isClient ? (
                                 <td style={{ padding: "12px 0", textAlign: "right" }}>
                                   <button
-                                    onClick={async () => {
+                                    onClick={() => {
                                       if (!canRemove) return;
-                                      if (!window.confirm("Remove this developer from the team?")) return;
-                                      try {
-                                        await contractService.removeTeamMember(a.assignmentID);
-                                        fetchContractDetails();
-                                      } catch (err) {
-                                        addToast(err?.response?.data?.message || "Failed to remove team member.", "error");
-                                      }
+                                      setConfirmRemoveAssignmentId(a.assignmentID);
                                     }}
                                     disabled={!canRemove}
                                     style={{

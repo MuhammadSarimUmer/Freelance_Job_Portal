@@ -4,6 +4,7 @@ import Sidebar from "../components/layout/Sidebar";
 import Footer from "../components/layout/Footer";
 import { applicationService } from "../api/services/contractService";
 import { useToast } from "../context/ToastContext";
+import ConfirmDialog from "../components/ui/ConfirmDialog";
 
 function ApplicationDetail() {
   const { id } = useParams();
@@ -13,6 +14,7 @@ function ApplicationDetail() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [editForm, setEditForm] = useState({
     appName: "",
     appType: "WEB",
@@ -76,11 +78,24 @@ function ApplicationDetail() {
     }
   };
 
+  const handleDeleteApplication = async () => {
+    if (!application?.appID) return;
+    try {
+      await applicationService.deleteApplication(application.appID);
+      addToast("Project app deleted.", "success");
+      navigate("/client/dashboard");
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to delete.", "error");
+    } finally {
+      setConfirmDeleteOpen(false);
+    }
+  };
+
   const applicationContracts = application?.contracts || [];
 
   return (
     <div style={{ backgroundColor: "var(--color-background)", minHeight: "100vh", display: "flex" }}>
-      <Sidebar activePage="Create Contract" role="client" />
+      <Sidebar activePage="Applications" role="client" />
       <main
         className="sidebar-layout-main"
         style={{
@@ -406,16 +421,7 @@ function ApplicationDetail() {
                 {/* Delete Button */}
                 {application.appID && (
                   <button
-                    onClick={async () => {
-                      if (!window.confirm("Delete this application?")) return;
-                      try {
-                        await applicationService.deleteApplication(application.appID);
-                        addToast("Project app deleted.", "success");
-                        navigate("/client/dashboard");
-                      } catch (err) {
-                        addToast(err?.response?.data?.message || "Failed to delete.", "error");
-                      }
-                    }}
+                    onClick={() => setConfirmDeleteOpen(true)}
                     style={{
                       padding: "1rem",
                       background: "transparent",
@@ -447,6 +453,16 @@ function ApplicationDetail() {
         ) : (
           <p style={{ color: "var(--color-error)", fontFamily: "var(--font-body)" }}>Application not found.</p>
         )}
+
+        <ConfirmDialog
+          open={confirmDeleteOpen}
+          title="Delete application"
+          message="This will permanently remove the application and any linked metadata. This action cannot be undone."
+          confirmLabel="Delete"
+          tone="danger"
+          onConfirm={handleDeleteApplication}
+          onCancel={() => setConfirmDeleteOpen(false)}
+        />
 
         <Footer />
       </main>

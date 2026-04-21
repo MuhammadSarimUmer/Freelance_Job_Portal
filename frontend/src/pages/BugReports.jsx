@@ -8,6 +8,7 @@ import {
 import { useToast } from "../context/ToastContext";
 import { contractService } from "../api/services/contractService";
 import { bugService } from "../api/services/bugService";
+import ConfirmDialog from "../components/ui/ConfirmDialog";
 
 function BugReports() {
   const { addToast } = useToast();
@@ -17,6 +18,7 @@ function BugReports() {
   const [bugReportsData, setBugReportsData] = useState([]);
   const [updatingBugId, setUpdatingBugId] = useState(null);
   const [deletingBugId, setDeletingBugId] = useState(null);
+  const [confirmDeleteBugId, setConfirmDeleteBugId] = useState(null);
   const [editingBugId, setEditingBugId] = useState(null);
   const [editBugForm, setEditBugForm] = useState({ title: "", description: "", severity: "Medium" });
   const [isSavingBug, setIsSavingBug] = useState(false);
@@ -34,8 +36,7 @@ function BugReports() {
     setNewBug({ ...newBug, [e.target.name]: e.target.value });
   };
 
-  const mapSeverityToBackend = (uiSeverity) => {
-    switch (uiSeverity) {
+          </button>
       case "Critical":
         return "CRITICAL";
       case "High":
@@ -184,7 +185,6 @@ function BugReports() {
 
   const handleDelete = async (bugId) => {
     if (!bugId) return;
-    if (!window.confirm("Delete this bug report?")) return;
     setDeletingBugId(bugId);
     try {
       await bugService.deleteBug(bugId);
@@ -194,6 +194,7 @@ function BugReports() {
       addToast(err?.response?.data?.message || "Failed to delete bug.", "error");
     } finally {
       setDeletingBugId(null);
+      setConfirmDeleteBugId(null);
     }
   };
 
@@ -1100,7 +1101,7 @@ function BugReports() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDelete(bug.bugId)}
+                        onClick={() => setConfirmDeleteBugId(bug.bugId)}
                         disabled={deletingBugId === bug.bugId}
                         style={{
                           background: "transparent",
@@ -1120,6 +1121,16 @@ function BugReports() {
             </table>
           </div>
         </section>
+
+        <ConfirmDialog
+          open={Boolean(confirmDeleteBugId)}
+          title="Delete bug report"
+          message="This will permanently remove the bug report. This action cannot be undone."
+          confirmLabel="Delete"
+          tone="danger"
+          onConfirm={() => handleDelete(confirmDeleteBugId)}
+          onCancel={() => setConfirmDeleteBugId(null)}
+        />
 
         <div style={{ marginTop: "4rem" }}>
           <Footer />

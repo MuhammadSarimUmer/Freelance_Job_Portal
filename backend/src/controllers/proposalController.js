@@ -45,7 +45,7 @@ const resolveClientProfile = async (userId) => prisma.client.findUnique({
 
 const resolveDeveloperProfile = async (userId) => prisma.developer.findUnique({
     where: { userID: userId },
-    select: { developerID: true, hourlyRate: true, availabilityStatus: true }
+    select: { developerID: true, hourlyRate: true, availabilityStatus: true, cvUrl: true }
 });
 
 const assertOpenContract = (contract) => {
@@ -106,6 +106,13 @@ const createProposal = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Developer profile not found' });
         }
 
+        if (!developer.cvUrl) {
+            return res.status(400).json({
+                success: false,
+                message: 'Upload your CV before sending a proposal'
+            });
+        }
+
         const contract = await prisma.projectContract.findUnique({
             where: { contractID: id },
             select: { contractID: true, status: true, clientID: true }
@@ -151,6 +158,10 @@ const createProposal = async (req, res) => {
         });
 
         const clientContact = proposal.contract?.client?.user;
+        const proposalDashboardLink = proposal.contract?.contractID
+            ? `/client/dashboard?contract=${proposal.contract.contractID}`
+            : null;
+
         if (proposal.contract?.client?.userID) {
             try {
                 await createNotification({
@@ -158,15 +169,15 @@ const createProposal = async (req, res) => {
                     type: 'PROPOSAL_RECEIVED',
                     title: 'New proposal received',
                     body: `${proposal.developer?.user?.fullName || 'A developer'} submitted a proposal for ${proposal.contract?.title || 'your contract'}.`,
-                    link: `/contracts/${proposal.contract.contractID}`
+                    link: proposalDashboardLink
                 });
             } catch (error) {
                 console.error('Proposal notification error:', error);
             }
         }
         if (clientContact?.email) {
-            const contractUrl = process.env.CLIENT_URL
-                ? `${process.env.CLIENT_URL}/contracts/${proposal.contract.contractID}`
+            const contractUrl = process.env.CLIENT_URL && proposal.contract?.contractID
+                ? `${process.env.CLIENT_URL}/client/dashboard?contract=${proposal.contract.contractID}`
                 : null;
 
             try {

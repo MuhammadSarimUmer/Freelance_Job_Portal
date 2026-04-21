@@ -7,10 +7,14 @@ import {
 } from "../data/mockData";
 import { useToast } from "../context/ToastContext";
 import { escrowService } from "../api/services/escrowService";
+import { useAuth } from "../context/AuthContext";
 
 function Earnings() {
   const [activeTab, setActiveTab] = useState("All");
   const { addToast } = useToast();
+  const { user } = useAuth();
+  const isClient = user?.role === "CLIENT";
+  const pageTitle = isClient ? "Transactions" : "Earnings";
 
   const [earningsTransactions, setEarningsTransactions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -117,7 +121,7 @@ function Earnings() {
         display: "flex",
       }}
     >
-      <Sidebar activePage="Earnings" role="developer" />
+      <Sidebar activePage={pageTitle} role={user?.role?.toLowerCase() || "developer"} />
 
       <main
         className="sidebar-layout-main"
@@ -164,7 +168,7 @@ function Earnings() {
               marginBottom: "0.75rem",
             }}
           >
-            Earnings
+            {pageTitle}
           </h1>
           <p
             style={{
@@ -179,7 +183,7 @@ function Earnings() {
 
         {isLoading ? (
           <p style={{ color: "var(--color-on-surface-variant)", marginBottom: "3rem" }}>
-            Loading earnings...
+            Loading {isClient ? "transactions" : "earnings"}...
           </p>
         ) : null}
 

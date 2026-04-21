@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { proposalService } from "../../api/services/contractService";
 import { useToast } from "../../context/ToastContext";
 
 function ManageApplicationsModal({ contract, onClose }) {
   const { addToast } = useToast();
+  const navigate = useNavigate();
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -156,22 +158,33 @@ function ManageApplicationsModal({ contract, onClose }) {
                     {app.message || "No message provided."}
                   </p>
 
-                  {app.status === "PENDING" && app.source === "DEVELOPER_PROPOSAL" ? (
-                    <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                    {app.developer?.developerID ? (
                       <button
-                        onClick={() => handleAccept(app.proposalID)}
-                        style={{ padding: "0.85rem 1.4rem", background: "var(--color-primary-container)", color: "var(--color-on-primary-container)", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 700 }}
-                      >
-                        Accept Proposal
-                      </button>
-                      <button
-                        onClick={() => handleDecline(app.proposalID)}
+                        onClick={() => navigate(`/developers/${app.developer.developerID}`)}
                         style={{ padding: "0.85rem 1.4rem", background: "transparent", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "6px", cursor: "pointer", fontWeight: 700 }}
                       >
-                        Decline
+                        View Profile
                       </button>
-                    </div>
-                  ) : null}
+                    ) : null}
+                    {app.status === "PENDING" && app.source === "DEVELOPER_PROPOSAL" ? (
+                      <>
+                        <button
+                          onClick={() => handleAccept(app.proposalID)}
+                          style={{ padding: "0.85rem 1.4rem", background: "var(--color-primary-container)", color: "var(--color-on-primary-container)", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 700 }}
+                        >
+                          Accept Proposal
+                        </button>
+                        <button
+                          onClick={() => handleDecline(app.proposalID)}
+                          style={{ padding: "0.85rem 1.4rem", background: "transparent", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "6px", cursor: "pointer", fontWeight: 700 }}
+                        >
+                          Decline
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                  )
                 </div>
               );
             })}

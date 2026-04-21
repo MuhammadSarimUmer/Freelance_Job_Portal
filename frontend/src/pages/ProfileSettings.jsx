@@ -9,6 +9,7 @@ import { profileService } from "../api/services/profileService";
 import { skillsService } from "../api/services/skillsService";
 import { uploadService } from "../api/services/uploadService";
 import { normalizeTechName } from "../utils/techName";
+import ConfirmDialog from "../components/ui/ConfirmDialog";
 
 function ProfileSettings() {
   const navigate = useNavigate();
@@ -56,6 +57,7 @@ function ProfileSettings() {
 
   const [portfolioUploadFile, setPortfolioUploadFile] = useState(null);
   const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
+  const [confirmDeleteAccountOpen, setConfirmDeleteAccountOpen] = useState(false);
   const [profileImagePreviewUrl, setProfileImagePreviewUrl] = useState("");
   const [portfolioPreviewUrl, setPortfolioPreviewUrl] = useState("");
   const [cvPreviewUrl, setCvPreviewUrl] = useState("");
@@ -504,16 +506,14 @@ function ProfileSettings() {
   };
 
   const handleDeleteAccount = async () => {
-    const confirmed = window.confirm(
-      "Are you absolutely sure? This will permanently delete your account and cannot be undone."
-    );
-    if (!confirmed) return;
     try {
       await profileService.deleteMyAccount();
       logout();
       navigate("/");
     } catch (err) {
       addToast(err?.response?.data?.message || "Failed to delete account.", "error");
+    } finally {
+      setConfirmDeleteAccountOpen(false);
     }
   };
 
@@ -586,7 +586,7 @@ function ProfileSettings() {
     <>
       <style>{layoutStyles}</style>
       <div className="settings-layout">
-        <Sidebar activePage="Profile" role={roleLower || "developer"} />
+        <Sidebar activePage="Settings" role={roleLower || "developer"} />
 
         <main className="settings-main anim-fade-in">
           <div
@@ -661,9 +661,9 @@ function ProfileSettings() {
                           }}
                         >
                           {isTogglingAvailability ? "Updating..." : "Toggle Availability"}
-                        </button>
-                      </FormField>
-                    </div>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteAccountOpen(true)}
                     
                     <FormField label="Portfolio URL">
                       <input type="url" className="input-field" name="portfolioURL" value={formData.portfolioURL} onChange={handleInput} />
@@ -939,11 +939,11 @@ function ProfileSettings() {
                             disabled={techLoading}
                             style={{ WebkitAppearance: "none" }}
                           >
-                            <option value="" disabled>
+                            <option value="" disabled style={{ color: "#111", background: "#fff" }}>
                               Select technology...
                             </option>
                             {allTechnologies.map((t) => (
-                              <option key={t.techID} value={t.techID}>
+                              <option key={t.techID} value={t.techID} style={{ color: "#111", background: "#fff" }}>
                                 {normalizeTechName(t.techName)} ({t.category})
                               </option>
                             ))}
@@ -1251,12 +1251,22 @@ function ProfileSettings() {
                   </p>
                   <button
                     type="button"
-                    onClick={handleDeleteAccount}
+                    onClick={() => setConfirmDeleteAccountOpen(true)}
                     style={{ padding: "10px 20px", background: "transparent", border: "1px solid var(--color-error)", color: "var(--color-error)", borderRadius: 6, cursor: "pointer", fontFamily: "var(--font-headline)", fontWeight: 700 }}
                   >
                     Delete My Account
                   </button>
                 </div>
+
+                <ConfirmDialog
+                  open={confirmDeleteAccountOpen}
+                  title="Delete account"
+                  message="This will permanently delete your account and all associated data. This action cannot be undone."
+                  confirmLabel="Delete account"
+                  tone="danger"
+                  onConfirm={handleDeleteAccount}
+                  onCancel={() => setConfirmDeleteAccountOpen(false)}
+                />
 
               </div>
             </div>

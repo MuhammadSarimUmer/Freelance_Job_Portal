@@ -152,7 +152,7 @@ function DeveloperDirectory() {
         }
       `}</style>
       
-      <Sidebar activePage="Browse Developers" role="client" />
+      <Sidebar activePage="Developer Directory" role="client" />
 
       {selectedDeveloper ? (
         <div
@@ -350,6 +350,53 @@ function DeveloperDirectory() {
                   {dev.cvUrl ? <span>CV</span> : null}
                   {!dev.portfolioURL && !dev.cvUrl ? <span>Profile only</span> : null}
                 </div>
+
+                {(dev.portfolioURL || dev.cvUrl) ? (
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.75rem" }}>
+                    {dev.portfolioURL ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(dev.portfolioURL, "_blank", "noopener,noreferrer");
+                        }}
+                        style={{
+                          padding: "0.4rem 0.8rem",
+                          borderRadius: "4px",
+                          border: "1px solid var(--color-outline-variant)",
+                          background: "var(--color-surface-container-highest)",
+                          color: "var(--color-on-surface)",
+                          cursor: "pointer",
+                          fontFamily: "var(--font-headline)",
+                          fontSize: "0.7rem",
+                        }}
+                      >
+                        View Portfolio
+                      </button>
+                    ) : null}
+                    {dev.cvUrl ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(dev.cvUrl, "_blank", "noopener,noreferrer");
+                        }}
+                        style={{
+                          padding: "0.4rem 0.8rem",
+                          borderRadius: "4px",
+                          border: "1px solid var(--color-outline-variant)",
+                          background: "var(--color-surface-container-highest)",
+                          color: "var(--color-on-surface)",
+                          cursor: "pointer",
+                          fontFamily: "var(--font-headline)",
+                          fontSize: "0.7rem",
+                        }}
+                      >
+                        View CV
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <div style={{ marginTop: "1rem" }}>
                   <button

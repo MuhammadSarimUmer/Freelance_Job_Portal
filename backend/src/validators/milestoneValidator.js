@@ -20,7 +20,7 @@ const createMilestoneValidator = [
         .escape(),
 
     body('description')
-        .notEmpty().withMessage('Description is required')
+        .optional({ checkFalsy: true })
         .trim()
         .escape(),
 

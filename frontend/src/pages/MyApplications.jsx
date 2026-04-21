@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import { proposalService } from "../api/services/contractService";
 import { useToast } from "../context/ToastContext";
 
 function MyApplications() {
   const { addToast } = useToast();
+  const navigate = useNavigate();
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -128,6 +130,11 @@ function MyApplications() {
                   <p style={{ color: "var(--color-on-surface-variant)", margin: 0, fontSize: "0.9rem" }}>
                     {app.source === "CLIENT_INVITE" ? "Client invitation" : "Developer proposal"} • {app.contract?.application?.appName || "Project"}
                   </p>
+                  {app.contract?.client?.user?.fullName ? (
+                    <p style={{ color: "var(--color-outline)", margin: "0.5rem 0 0", fontSize: "0.85rem" }}>
+                      Client: {app.contract.client.user.fullName}
+                    </p>
+                  ) : null}
                   {app.message ? (
                     <p style={{ color: "var(--color-secondary)", fontSize: "0.85rem", marginTop: "0.75rem", marginBottom: 0, maxWidth: "40rem" }}>
                       {app.message}
@@ -143,6 +150,14 @@ function MyApplications() {
                   </p>
                   {app.status === "PENDING" && app.source === "CLIENT_INVITE" ? (
                     <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end", marginTop: "0.75rem", flexWrap: "wrap" }}>
+                      {app.contract?.client?.clientID ? (
+                        <button
+                          onClick={() => navigate(`/clients/${app.contract.client.clientID}`)}
+                          style={{ padding: "0.55rem 0.9rem", borderRadius: "4px", border: "1px solid var(--color-outline-variant)", background: "transparent", color: "var(--color-on-surface)", cursor: "pointer", fontWeight: 700 }}
+                        >
+                          View Client
+                        </button>
+                      ) : null}
                       <button
                         onClick={() => handleAcceptInvite(app.proposalID)}
                         style={{ padding: "0.55rem 0.9rem", borderRadius: "4px", border: "none", background: "var(--color-primary-container)", color: "var(--color-on-primary-container)", cursor: "pointer", fontWeight: 700 }}
