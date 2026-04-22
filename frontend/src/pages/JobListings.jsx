@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Footer from "../components/layout/Footer";
 import { techTags } from "../data/mockData";
 import JobApplyModal from "../components/ui/JobApplyModal";
@@ -7,13 +8,36 @@ import { useToast } from "../context/ToastContext";
 import { normalizeTechName } from "../utils/techName";
 
 function JobListings() {
+  const navigate = useNavigate();
   const { addToast } = useToast();
+
+  const getClientRating = (client) => {
+    const reviews = client?.user?.reviewsReceived || [];
+    if (reviews.length === 0) return null;
+    const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+    return { avg: avg.toFixed(1), count: reviews.length };
+  };
+
+  const renderMiniStars = (avg) => {
+    const full = Math.floor(avg);
+    return (
+      <span style={{ fontSize: "0.75rem", letterSpacing: "0.05em" }}>
+        {[1, 2, 3, 4, 5].map((s) => (
+          <span key={s} style={{ color: s <= full ? "var(--color-primary)" : "var(--color-outline)" }}>
+            {s <= full ? "★" : "☆"}
+          </span>
+        ))}
+      </span>
+    );
+  };
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTags, setActiveTags] = useState([]);
   const [budget, setBudget] = useState(0);
   const [selectedJob, setSelectedJob] = useState(null);
   const [contracts, setContracts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 12;
   const [experienceFilter, setExperienceFilter] = useState("Any");
   const [appTypes, setAppTypes] = useState({
     "Web Application": true,
@@ -105,6 +129,14 @@ function JobListings() {
     return queryMatch && appTypeMatch && tagMatch && budgetMatch && experienceMatch;
   }), [activeTags, appTypes, budget, contracts, experienceFilter, searchQuery]);
 
+  // Sort recent-first
+  const sortedJobs = useMemo(() => [...filteredJobs].sort((a, b) =>
+    new Date(b.createdAt || b.startDate || 0) - new Date(a.createdAt || a.startDate || 0)
+  ), [filteredJobs]);
+
+  const totalPages = Math.ceil(sortedJobs.length / ITEMS_PER_PAGE);
+  const pagedJobs = sortedJobs.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
   const allJobs = contracts;
 
   // Inject scoped styles for layout responsiveness
@@ -134,18 +166,18 @@ function JobListings() {
     .job-skeleton {
       background: var(--color-surface-container-low);
       border: 1px solid var(--color-outline-variant);
-      border-radius: 8px;
+      border-radius: 12px;
       padding: 2rem;
       display: grid;
       gap: 0.75rem;
       animation: shimmer 1.6s infinite;
-      background-image: linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 100%);
+      background-image: linear-gradient(90deg, var(--color-surface-container-low) 0%, var(--color-surface-container) 50%, var(--color-surface-container-low) 100%);
       background-size: 200% 100%;
     }
     .job-skeleton-line {
       height: 12px;
       border-radius: 6px;
-      background: rgba(255,255,255,0.08);
+      background: var(--color-surface-container-highest);
     }
     .job-skeleton-line.large { height: 20px; width: 70%; }
     .job-skeleton-line.medium { width: 50%; }
@@ -232,7 +264,33 @@ function JobListings() {
                 <br />
                 <span style={{ color: "var(--color-secondary)" }}>RIGHT FIT.</span>
               </h1>
-              <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", width: "100%", maxWidth: "520px" }}>
+              <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", width: "100%", maxWidth: "580px" }}>
+                <button
+                  type="button"
+                  onClick={fetchContracts}
+                  disabled={isLoading}
+                  style={{
+                    flexShrink: 0,
+                    padding: "0.75rem 1.1rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--color-outline-variant)",
+                    background: "transparent",
+                    color: "var(--color-on-surface)",
+                    cursor: isLoading ? "not-allowed" : "pointer",
+                    fontFamily: "var(--font-headline)",
+                    fontWeight: 700,
+                    fontSize: "0.72rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    opacity: isLoading ? 0.6 : 1,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>refresh</span>
+                  {isLoading ? "Loading..." : "Refresh"}
+                </button>
                 <div style={{ position: "relative", flex: 1 }}>
                   <span
                     className="material-symbols-outlined"
@@ -555,165 +613,172 @@ function JobListings() {
                     gap: "2rem",
                   }}
                 >
-                  {filteredJobs.map((job) => (
-                    <div
-                      key={job.contractID}
-                      style={{
-                        background: "var(--color-surface-container-low)",
-                        padding: "2rem",
-                        display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "space-between",
-                        borderRadius: "8px",
-                        border: "1px solid var(--color-outline-variant)",
-                      }}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "flex-start",
-                            marginBottom: "1rem",
-                            gap: "0.75rem",
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: "0.65rem",
-                              fontWeight: 700,
-                              textTransform: "uppercase",
-                              letterSpacing: "0.1em",
-                              padding: "3px 10px",
-                              color: "var(--color-secondary)",
-                              fontFamily: "var(--font-label)",
-                              border: "1px solid var(--color-outline-variant-strong)",
-                              borderRadius: "4px",
-                            }}
-                          >
-                            {job.application?.appType || "PROJECT"}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: "0.85rem",
-                              fontWeight: 700,
-                              color: "var(--color-on-surface)",
-                              fontFamily: "var(--font-body)",
-                            }}
-                          >
-                            ${Number(job.totalAmount || 0).toLocaleString()}
-                          </span>
-                        </div>
-                        <h3
-                          style={{
-                            fontFamily: "var(--font-headline)",
-                            fontSize: "1.4rem",
-                            fontWeight: 700,
-                            color: "var(--color-on-surface)",
-                            marginBottom: "0.5rem",
-                            lineHeight: 1.2,
-                          }}
-                        >
-                          {job.title}
-                        </h3>
-                        <p style={{ color: "var(--color-secondary)", marginTop: 0, marginBottom: "1rem" }}>
-                          {job.application?.appName || "Client project"}
-                        </p>
-                        <p
-                          style={{
-                            fontSize: "0.875rem",
-                            lineHeight: 1.6,
-                            color: "var(--color-secondary)",
-                            fontFamily: "var(--font-body)",
-                            marginBottom: "1.5rem",
-                          }}
-                        >
-                          {job.description || "No scope description provided."}
-                        </p>
-                        <div
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: "0.5rem",
-                            marginBottom: "1.5rem",
-                          }}
-                        >
-                          {(job.technologies || []).length > 0 ? job.technologies.map((tech) => (
-                            <span
-                              key={`${job.contractID}-${tech.techID}`}
-                              style={{
-                                fontSize: "0.7rem",
-                                fontWeight: 700,
-                                textTransform: "uppercase",
-                                padding: "3px 10px",
-                                color: "var(--color-secondary)",
-                                border: "1px solid var(--color-outline-variant-strong)",
-                                fontFamily: "var(--font-body)",
-                                background: "var(--color-surface-container-highest)",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              {tech.tech?.techName || "Tech"} • {tech.requiredLevel}
-                            </span>
-                          )) : (
-                            <span style={{ color: "var(--color-outline)" }}>No required tech added yet</span>
-                          )}
-                        </div>
-                      </div>
+                  {pagedJobs.map((job) => {
+                    const clientRating = getClientRating(job.client);
+                    const clientName = job.client?.user?.fullName || "Client";
+                    const clientAvatar = job.client?.user?.profileImageUrl;
+                    const clientInitials = clientName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+                    const techList = job.technologies || [];
+                    const proposalCount = job.proposals?.length || 0;
+                    const startDate = job.startDate ? new Date(job.startDate).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : null;
+                    const endDate = job.endDate ? new Date(job.endDate).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : null;
+
+                    return (
                       <div
+                        key={job.contractID}
                         style={{
+                          background: "var(--color-surface-container-low)",
+                          borderRadius: "8px",
+                          border: "1px solid var(--color-outline-variant)",
+                          borderLeft: "3px solid var(--color-primary)",
                           display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          paddingTop: "1rem",
-                          borderTop: "1px solid var(--color-outline-variant)",
-                          gap: "1rem",
+                          flexDirection: "column",
+                          transition: "border-color 0.2s, box-shadow 0.2s",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderLeftColor = "var(--color-secondary)";
+                          e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.12)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderLeftColor = "var(--color-primary)";
+                          e.currentTarget.style.boxShadow = "none";
                         }}
                       >
-                        <span
-                          style={{
-                            fontSize: "0.7rem",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.1em",
-                            fontWeight: 700,
-                            color: "var(--color-outline)",
-                            fontFamily: "var(--font-label)",
-                          }}
-                        >
-                          {job.proposals?.length || 0} proposal{(job.proposals?.length || 0) === 1 ? "" : "s"}
-                        </span>
-                        <button
-                          onClick={() => setSelectedJob(job)}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            fontFamily: "var(--font-headline)",
-                            fontWeight: 700,
-                            fontSize: "0.8rem",
-                            color: "var(--color-secondary)",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.1em",
-                          }}
-                        >
-                          Review & Propose
-                          <span
-                            className="material-symbols-outlined"
-                            style={{ fontSize: "1rem" }}
-                          >
-                            arrow_forward
-                          </span>
-                        </button>
+                        {/* CARD BODY */}
+                        <div style={{ padding: "1.4rem 1.6rem", display: "flex", flexDirection: "column", flex: 1, gap: "0.85rem" }}>
+
+                          {/* TOP META: type badge + budget */}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", padding: "3px 8px", color: "var(--color-secondary)", fontFamily: "var(--font-label)", background: "var(--color-surface-container)", border: "1px solid var(--color-outline-variant)", borderRadius: "4px" }}>
+                              {job.application?.appType || "PROJECT"}
+                            </span>
+                            <span style={{ fontFamily: "var(--font-headline)", fontWeight: 700, fontSize: "1.1rem", color: "var(--color-on-surface)", letterSpacing: "-0.02em" }}>
+                              ${Number(job.totalAmount || 0).toLocaleString()}
+                            </span>
+                          </div>
+
+                          {/* TITLE */}
+                          <div>
+                            <h3 style={{ fontFamily: "var(--font-headline)", fontSize: "1.1rem", fontWeight: 700, color: "var(--color-on-surface)", margin: 0, lineHeight: 1.3, letterSpacing: "-0.01em" }}>
+                              {job.title}
+                            </h3>
+                            <p style={{ margin: "3px 0 0", fontSize: "0.78rem", color: "var(--color-outline)", fontFamily: "var(--font-body)" }}>
+                              {job.application?.appName || "Project"}
+                              {startDate ? ` · Starts ${startDate}` : ""}
+                              {endDate ? ` → ${endDate}` : ""}
+                            </p>
+                          </div>
+
+                          {/* DESCRIPTION */}
+                          <p style={{ fontSize: "0.85rem", lineHeight: 1.6, color: "var(--color-secondary)", fontFamily: "var(--font-body)", margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                            {job.description || "No scope provided."}
+                          </p>
+
+                          {/* TECH TAGS */}
+                          {techList.length > 0 ? (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                              {techList.slice(0, 4).map((tech) => (
+                                <span
+                                  key={`${job.contractID}-${tech.techID}`}
+                                  style={{ fontSize: "0.62rem", fontWeight: 600, textTransform: "uppercase", padding: "2px 7px", color: "var(--color-on-surface-variant)", fontFamily: "var(--font-label)", background: "var(--color-surface-container)", borderRadius: "3px", letterSpacing: "0.06em" }}
+                                >
+                                  {tech.tech?.techName || "Tech"}
+                                </span>
+                              ))}
+                              {techList.length > 4 ? (
+                                <span style={{ fontSize: "0.62rem", color: "var(--color-outline)", padding: "2px 3px", fontFamily: "var(--font-label)" }}>+{techList.length - 4}</span>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        {/* CARD FOOTER */}
+                        <div style={{ padding: "0.9rem 1.6rem", borderTop: "1px solid var(--color-outline-variant)", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+
+                          {/* CLIENT INFO */}
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.55rem", flex: 1, minWidth: 0 }}>
+                            {clientAvatar ? (
+                              <img src={clientAvatar} alt={clientName} style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: "1px solid var(--color-outline-variant)" }} />
+                            ) : (
+                              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--color-surface-container-highest)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.62rem", fontWeight: 700, color: "var(--color-secondary)", flexShrink: 0 }}>
+                                {clientInitials}
+                              </div>
+                            )}
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ margin: 0, fontSize: "0.78rem", fontWeight: 600, color: "var(--color-on-surface)", fontFamily: "var(--font-body)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {clientName}
+                              </p>
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                                {clientRating ? (
+                                  <>
+                                    {renderMiniStars(clientRating.avg)}
+                                    <span style={{ fontSize: "0.65rem", color: "var(--color-outline)" }}>{clientRating.avg}</span>
+                                  </>
+                                ) : (
+                                  <span style={{ fontSize: "0.65rem", color: "var(--color-outline)" }}>New client</span>
+                                )}
+                                <span style={{ fontSize: "0.65rem", color: "var(--color-outline)", marginLeft: "0.35rem" }}>
+                                  · {proposalCount} proposal{proposalCount !== 1 ? "s" : ""}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* ACTIONS */}
+                          <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
+                            {job.client?.clientID ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); navigate(`/clients/${job.client.clientID}`); }}
+                                title="View client profile"
+                                style={{ padding: "0.5rem 0.8rem", background: "transparent", border: "1px solid var(--color-outline-variant)", borderRadius: "5px", cursor: "pointer", fontFamily: "var(--font-headline)", fontWeight: 700, fontSize: "0.7rem", color: "var(--color-on-surface)", letterSpacing: "0.05em" }}
+                              >
+                                Profile
+                              </button>
+                            ) : null}
+                            <button
+                              onClick={() => setSelectedJob(job)}
+                              style={{ padding: "0.5rem 1.1rem", background: "var(--color-primary)", border: "none", borderRadius: "5px", cursor: "pointer", fontFamily: "var(--font-headline)", fontWeight: 700, fontSize: "0.7rem", color: "var(--color-on-primary)", letterSpacing: "0.05em" }}
+                            >
+                              Apply
+                            </button>
+                          </div>
+
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div style={{ background: "var(--color-surface-container-low)", padding: "2rem", borderRadius: "8px", border: "1px solid var(--color-outline-variant)" }}>
                   <p style={{ color: "var(--color-secondary)", margin: 0 }}>No open contracts match your current filters.</p>
+                </div>
+              )}
+
+              {/* PAGINATION */}
+              {!isLoading && totalPages > 1 && (
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem", marginTop: "2rem", flexWrap: "wrap" }}>
+                  <button type="button" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                    style={{ padding: "0.5rem 1rem", borderRadius: "6px", border: "1px solid var(--color-outline-variant)", background: "transparent", color: currentPage === 1 ? "var(--color-outline)" : "var(--color-on-surface)", cursor: currentPage === 1 ? "not-allowed" : "pointer", fontFamily: "var(--font-headline)", fontSize: "0.75rem" }}>
+                    ← Prev
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+                    .reduce((acc, p, i, arr) => { if (i > 0 && p - arr[i - 1] > 1) acc.push("..."); acc.push(p); return acc; }, [])
+                    .map((p, i) => p === "..." ? (
+                      <span key={`e-${i}`} style={{ color: "var(--color-outline)" }}>…</span>
+                    ) : (
+                      <button key={p} type="button" onClick={() => setCurrentPage(p)}
+                        style={{ padding: "0.5rem 0.85rem", borderRadius: "6px", border: `1px solid ${currentPage === p ? "var(--color-primary)" : "var(--color-outline-variant)"}`, background: currentPage === p ? "var(--color-primary)" : "transparent", color: currentPage === p ? "var(--color-on-primary)" : "var(--color-on-surface)", cursor: "pointer", fontFamily: "var(--font-headline)", fontSize: "0.75rem", fontWeight: 700 }}>
+                        {p}
+                      </button>
+                    ))}
+                  <button type="button" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                    style={{ padding: "0.5rem 1rem", borderRadius: "6px", border: "1px solid var(--color-outline-variant)", background: "transparent", color: currentPage === totalPages ? "var(--color-outline)" : "var(--color-on-surface)", cursor: currentPage === totalPages ? "not-allowed" : "pointer", fontFamily: "var(--font-headline)", fontSize: "0.75rem" }}>
+                    Next →
+                  </button>
+                  <span style={{ fontSize: "0.72rem", color: "var(--color-outline)" }}>
+                    {sortedJobs.length} job{sortedJobs.length !== 1 ? "s" : ""} · Page {currentPage} of {totalPages}
+                  </span>
                 </div>
               )}
             </div>

@@ -36,7 +36,8 @@ function BugReports() {
     setNewBug({ ...newBug, [e.target.name]: e.target.value });
   };
 
-          </button>
+  const mapSeverityToBackend = (uiSeverity) => {
+    switch (uiSeverity) {
       case "Critical":
         return "CRITICAL";
       case "High":
@@ -144,28 +145,28 @@ function BugReports() {
     }
   };
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setIsLoading(true);
-        const res = await contractService.getMyContracts();
-        const cs = res.data?.data || [];
-        setContracts(cs);
-        await fetchBugReports(cs);
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const res = await contractService.getMyContracts();
+      const cs = res.data?.data || [];
+      setContracts(cs);
+      await fetchBugReports(cs);
 
-        if (!newBug.contractId && cs.length > 0) {
-          setNewBug((prev) => ({ ...prev, contractId: cs[0].contractID }));
-        }
-      } catch (err) {
-        console.error("Failed to load bug reports:", err);
-        addToast(err?.response?.data?.message || "Failed to load bug reports.", "error");
-        setBugReportsData([]);
-        setContracts([]);
-      } finally {
-        setIsLoading(false);
+      if (!newBug.contractId && cs.length > 0) {
+        setNewBug((prev) => ({ ...prev, contractId: cs[0].contractID }));
       }
-    };
+    } catch (err) {
+      console.error("Failed to load bug reports:", err);
+      addToast(err?.response?.data?.message || "Failed to load bug reports.", "error");
+      setBugReportsData([]);
+      setContracts([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -320,33 +321,44 @@ function BugReports() {
           </div>
 
           {/* Report New Bug Button */}
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className={showForm ? "" : "signature-cta"}
-            style={{
-              padding: "0.875rem 2rem",
-              background: showForm ? "var(--color-surface-container-highest)" : "transparent",
-              color: showForm ? "var(--color-secondary)" : "var(--color-on-primary-container)",
-              fontFamily: "var(--font-headline)",
-              fontWeight: 700,
-              border: "none",
-              cursor: "pointer",
-              fontSize: "0.875rem",
-              transition: "all 0.2s",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              borderRadius: "4px"
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: "1.1rem" }}
+          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={fetchData}
+              disabled={isLoading}
+              style={{ padding: "0.875rem 1.25rem", borderRadius: "4px", border: "1px solid var(--color-outline-variant)", background: "transparent", color: "var(--color-on-surface)", cursor: isLoading ? "not-allowed" : "pointer", fontFamily: "var(--font-headline)", fontWeight: 700, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isLoading ? 0.6 : 1, display: "flex", alignItems: "center", gap: "0.35rem" }}
             >
-              {showForm ? "close" : "add"}
-            </span>
-            {showForm ? "Cancel" : "Report Bug"}
-          </button>
+              <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>refresh</span>
+              {isLoading ? "Loading..." : "Refresh"}
+            </button>
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className={showForm ? "" : "signature-cta"}
+              style={{
+                padding: "0.875rem 2rem",
+                background: showForm ? "var(--color-surface-container-highest)" : "transparent",
+                color: showForm ? "var(--color-secondary)" : "var(--color-on-primary-container)",
+                fontFamily: "var(--font-headline)",
+                fontWeight: 700,
+                border: "none",
+                cursor: "pointer",
+                fontSize: "0.875rem",
+                transition: "all 0.2s",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                borderRadius: "4px"
+              }}
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "1.1rem" }}
+              >
+                {showForm ? "close" : "add"}
+              </span>
+              {showForm ? "Cancel" : "Report Bug"}
+            </button>
+          </div>
         </header>
 
         {isLoading ? (
@@ -536,11 +548,10 @@ function BugReports() {
                           newBug.severity === level
                             ? bugSeverityColors[level].bg
                             : "var(--color-surface-container)",
-                        border: `1px solid ${
-                          newBug.severity === level
-                            ? bugSeverityColors[level].color
-                            : "var(--color-outline-variant-strong)"
-                        }`,
+                        border: `1px solid ${newBug.severity === level
+                          ? bugSeverityColors[level].color
+                          : "var(--color-outline-variant-strong)"
+                          }`,
                         color:
                           newBug.severity === level
                             ? bugSeverityColors[level].color
@@ -797,11 +808,10 @@ function BugReports() {
                           editBugForm.severity === level
                             ? bugSeverityColors[level].bg
                             : "var(--color-surface-container)",
-                        border: `1px solid ${
-                          editBugForm.severity === level
-                            ? bugSeverityColors[level].color
-                            : "var(--color-outline-variant-strong)"
-                        }`,
+                        border: `1px solid ${editBugForm.severity === level
+                          ? bugSeverityColors[level].color
+                          : "var(--color-outline-variant-strong)"
+                          }`,
                         color:
                           editBugForm.severity === level
                             ? bugSeverityColors[level].color
@@ -896,15 +906,15 @@ function BugReports() {
                     borderBottom: "1px solid var(--color-outline-variant-strong)",
                   }}
                 >
-                    {[
-                      "Bug ID",
-                      "Contract",
-                      "Title",
-                      "Severity",
-                      "Status",
-                      "Reported",
-                      "Actions",
-                    ].map((col) => (
+                  {[
+                    "Bug ID",
+                    "Contract",
+                    "Title",
+                    "Severity",
+                    "Status",
+                    "Reported",
+                    "Actions",
+                  ].map((col) => (
                     <th
                       key={col}
                       style={{

@@ -65,6 +65,7 @@ function ContractWorkspace() {
   });
   const [isAssigning, setIsAssigning] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   const statusLabelMap = {
     DRAFT: "OPEN",
@@ -454,6 +455,20 @@ function ContractWorkspace() {
     }
   };
 
+  const handleCompleteContract = async () => {
+    if (!contract?.contractID) return;
+    setIsCompleting(true);
+    try {
+      await contractService.updateContractStatus(contract.contractID, "COMPLETED");
+      await fetchContractDetails();
+      addToast("Contract marked as completed.", "success");
+    } catch (err) {
+      addToast(err?.response?.data?.message || "Failed to complete contract.", "error");
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+
   const handleShareBlur = async (assignmentId) => {
     const rawValue = teamShareEdits[assignmentId];
     if (rawValue === undefined) return;
@@ -643,12 +658,12 @@ function ContractWorkspace() {
           font-weight: 700;
         }
       `}</style>
-      
+
       <Sidebar
         activePage={isClient ? "Applications" : "My Proposals"}
         role={user?.role?.toLowerCase() || "developer"}
       />
-      
+
       {reviewModalOpen && contract && (
         <ReviewModal
           contract={contract}
@@ -698,13 +713,13 @@ function ContractWorkspace() {
       />
 
       <main className="sidebar-layout-main" style={{ marginLeft: "256px", flex: 1, padding: "calc(96px + 3rem) 3rem 3rem 3rem" }}>
-        
-          {isLoading ? (
-            <p style={{ color: "var(--color-on-surface-variant)" }}>Loading contract...</p>
+
+        {isLoading ? (
+          <p style={{ color: "var(--color-on-surface-variant)" }}>Loading contract...</p>
         ) : loadError ? (
-           <p style={{ color: "var(--color-error)" }}>{loadError}</p>
+          <p style={{ color: "var(--color-error)" }}>{loadError}</p>
         ) : !contract ? (
-           <p style={{ color: "var(--color-on-surface-variant)" }}>Contract unavailable.</p>
+          <p style={{ color: "var(--color-on-surface-variant)" }}>Contract unavailable.</p>
         ) : (
           <div className="anim-fade-in">
             {/* Header */}
@@ -736,7 +751,33 @@ function ContractWorkspace() {
                   >
                     {isPublishing ? "Publishing..." : "Publish Contract"}
                   </button>
-                              onClick={() => setConfirmDeleteBugId(bug.bugID)}
+                ) : null}
+                {(() => {
+                  if (!isClient || contract?.status !== "IN_PROGRESS") return null;
+                  const milestones = contract?.milestones || [];
+                  const allMilestonesCompleted = milestones.length > 0 && milestones.every((m) => m.status === "COMPLETED");
+                  if (!allMilestonesCompleted) return null;
+                  return (
+                    <button
+                      type="button"
+                      onClick={handleCompleteContract}
+                      disabled={isCompleting}
+                      style={{
+                        background: "var(--color-secondary)",
+                        color: "var(--color-on-secondary-container)",
+                        border: "none",
+                        borderRadius: 6,
+                        padding: "0.7rem 1.2rem",
+                        cursor: isCompleting ? "not-allowed" : "pointer",
+                        fontFamily: "var(--font-headline)",
+                        fontWeight: 700,
+                        opacity: isCompleting ? 0.7 : 1,
+                      }}
+                    >
+                      {isCompleting ? "Completing..." : "✓ Complete Project"}
+                    </button>
+                  );
+                })()}
                 {canLeaveReview ? (
                   <button
                     type="button"
@@ -789,7 +830,7 @@ function ContractWorkspace() {
             {/* Tabs */}
             <div style={{ display: "flex", borderBottom: "1px solid var(--color-outline-variant)", marginBottom: "3rem" }}>
               {["milestones", "team", "bugs", "messages", "disputes"].map(tab => (
-                <div 
+                <div
                   key={tab}
                   className={`workspace-tab ${activeTab === tab ? "active" : ""}`}
                   onClick={() => setActiveTab(tab)}
@@ -807,13 +848,13 @@ function ContractWorkspace() {
                   {user?.role === "CLIENT" ? (
                     <div className="escrow-callout">
                       <span style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.2em", color: "var(--color-secondary)", fontWeight: 700 }}>
-                        Escrow simulation
+                        Escrow &amp; Payments
                       </span>
                       <span style={{ color: "var(--color-on-surface-variant)", fontSize: "0.9rem" }}>
-                        Funding a milestone creates an escrow record immediately. No real payment is processed.
+                        Go to the <strong>Escrow</strong> page to fund a milestone via SafePay. Payment must be completed before funds can be released.
                       </span>
                       <span style={{ color: "var(--color-on-surface-variant)", fontSize: "0.85rem" }}>
-                        Release is available after a milestone is marked completed and shares total 100%.
+                        Release requires: (1) milestone marked <strong>Completed</strong>, and (2) escrow status <strong>Funded</strong> (SafePay payment done).
                       </span>
                     </div>
                   ) : null}
@@ -906,7 +947,13 @@ function ContractWorkspace() {
                       </div>
                     ) : null}
                   </div>
-                  {user?.role === "CLIENT" ? (
+                  {user?.role === "CLIENT" && (contract?.status === "COMPLETED" || contract?.status === "CANCELLED") && (
+                    <div style={{ marginBottom: "1rem", padding: "0.85rem 1rem", borderRadius: "6px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: "1rem", color: "#ef4444" }}>lock</span>
+                      <span style={{ fontSize: "0.82rem", color: "#ef4444" }}>This contract is {contract.status.toLowerCase()}. No further edits are allowed.</span>
+                    </div>
+                  )}
+                  {user?.role === "CLIENT" && contract?.status !== "COMPLETED" && contract?.status !== "CANCELLED" && !(contract?.milestones?.length > 0) ? (
                     <div style={{ marginBottom: "1.5rem", display: "grid", gap: "0.75rem" }}>
                       <h4 style={{ margin: 0, fontFamily: "var(--font-headline)" }}>New Milestone</h4>
                       <input
@@ -980,6 +1027,11 @@ function ContractWorkspace() {
                       </button>
                     </div>
                   ) : null}
+                  {user?.role === "CLIENT" && contract?.status !== "COMPLETED" && contract?.status !== "CANCELLED" && contract?.milestones?.length > 0 ? (
+                    <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", borderRadius: "6px", background: "var(--color-surface-container)", border: "1px solid var(--color-outline-variant)", fontSize: "0.82rem", color: "var(--color-on-surface-variant)" }}>
+                      Milestones are locked once defined. Discuss changes with your developer via the contract chat.
+                    </div>
+                  ) : null}
 
                   {contract.milestones?.length > 0 ? (
                     <div style={{ display: "grid", gap: "1rem" }}>
@@ -1037,7 +1089,7 @@ function ContractWorkspace() {
                                 <select
                                   value={m.status || "PENDING"}
                                   onChange={(e) => handleUpdateMilestoneStatus(m.milestoneID, e.target.value)}
-                                  disabled={updatingMilestoneId === m.milestoneID || (isDeveloper && m.status === "COMPLETED")}
+                                  disabled={updatingMilestoneId === m.milestoneID || (isDeveloper && m.status === "COMPLETED") || contract?.status === "COMPLETED" || contract?.status === "CANCELLED"}
                                   style={{ marginTop: "0.5rem", background: "var(--color-surface)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: 4, padding: "4px 8px" }}
                                 >
                                   <option value="PENDING" disabled={isDeveloper}>Pending</option>

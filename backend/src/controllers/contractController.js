@@ -25,7 +25,10 @@ const contractDetailInclude = {
                 select: {
                     fullName: true,
                     email: true,
-                    profileImageUrl: true
+                    profileImageUrl: true,
+                    reviewsReceived: {
+                        select: { rating: true }
+                    }
                 }
             }
         }
@@ -139,6 +142,34 @@ const createContract = async (req, res) => {
             endDate,
             totalAmount
         } = req.body;
+
+        if (!startDate) {
+            return res.status(400).json({
+                success: false,
+                message: 'Start date is required'
+            });
+        }
+
+        const start = new Date(startDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (isNaN(start.getTime()) || start < today) {
+            return res.status(400).json({
+                success: false,
+                message: 'Start date cannot be in the past'
+            });
+        }
+
+        if (endDate) {
+            const end = new Date(endDate);
+            if (isNaN(end.getTime()) || end <= start) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'End date must be after start date'
+                });
+            }
+        }
 
         const amount = new Prisma.Decimal(totalAmount);
 
@@ -270,7 +301,7 @@ const getOpenContracts = async (req, res) => {
             prisma.projectContract.findMany({
                 where: whereClause,
                 include: contractDetailInclude,
-                orderBy: { startDate: 'asc' },
+                orderBy: { startDate: 'desc' },
                 skip,
                 take: limit
             }),
@@ -396,17 +427,6 @@ const updateContract = async (req, res) => {
             data: updateData
         });
 
-        try {
-            await notifyContractDevelopers(id, {
-                type: 'CONTRACT_STATUS_UPDATED',
-                title: 'Contract status updated',
-                body: `${contract.title || 'Contract'} is now ${status.replace('_', ' ')}.`,
-                link: `/contracts/${id}`
-            });
-        } catch (error) {
-            console.error('Contract status notification error:', error);
-        }
-
         return res.status(200).json({
             success: true,
             message: 'Contract updated successfully',
@@ -482,6 +502,20 @@ const updateContractStatus = async (req, res) => {
         }
 
         if (status === 'COMPLETED') {
+            const openDispute = await prisma.dispute.findFirst({
+                where: {
+                    contractID: id,
+                    status: { in: ['OPEN', 'UNDER_REVIEW'] }
+                }
+            });
+
+            if (openDispute) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cannot complete contract while an open dispute exists. Resolve the dispute first.'
+                });
+            }
+
             const milestones = await prisma.milestone.findMany({
                 where: { contractID: id },
                 select: { status: true }

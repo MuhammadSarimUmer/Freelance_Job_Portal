@@ -16,6 +16,11 @@ function DeveloperDirectory() {
   const [selectedContractId, setSelectedContractId] = useState("");
   const [inviteRole, setInviteRole] = useState("Lead Developer");
   const [isInviting, setIsInviting] = useState(false);
+  const [sortBy, setSortBy] = useState("rating");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 12;
+  const [availabilityFilter, setAvailabilityFilter] = useState("");
+  const [minExperience, setMinExperience] = useState("");
 
   useEffect(() => {
     loadDirectory();
@@ -24,8 +29,13 @@ function DeveloperDirectory() {
   const loadDirectory = async () => {
     try {
       setIsLoading(true);
+      const params = { limit: 300 };
+      if (availabilityFilter) params.status = availabilityFilter;
+      if (minExperience) params.minExperience = minExperience;
+      if (sortBy === "rating") params.sortBy = "rating";
+
       const [devRes, contractRes] = await Promise.all([
-        profileService.getAllDevelopers(),
+        profileService.getAllDevelopers(params),
         contractService.getMyContracts(),
       ]);
 
@@ -68,14 +78,43 @@ function DeveloperDirectory() {
     }
   };
 
-  const filteredDevs = developers.filter((dev) => {
-    const term = searchTerm.toLowerCase();
-    const nameMatch = dev.user?.fullName?.toLowerCase().includes(term);
-    const techMatch = (dev.knownTechs || []).some((kt) =>
-      kt.tech?.techName?.toLowerCase().includes(term),
+  const getInitials = (name = "") =>
+    name
+      .split(" ")
+      .filter(Boolean)
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+
+  const filteredDevs = developers
+    .filter((dev) => {
+      const term = searchTerm.toLowerCase();
+      const nameMatch = dev.user?.fullName?.toLowerCase().includes(term);
+      const techMatch = (dev.knownTechs || []).some((kt) =>
+        kt.tech?.techName?.toLowerCase().includes(term),
+      );
+      return !term || nameMatch || techMatch;
+    })
+    .sort((a, b) => {
+      if (sortBy === "rating") return (b.averageRating || 0) - (a.averageRating || 0);
+      return 0;
+    });
+
+  const totalPages = Math.ceil(filteredDevs.length / ITEMS_PER_PAGE);
+  const pagedDevs = filteredDevs.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  const renderStars = (rating) => {
+    if (!rating) return null;
+    const full = Math.floor(rating);
+    const half = rating - full >= 0.5;
+    return (
+      <span style={{ fontSize: "0.75rem", color: "var(--color-primary)", letterSpacing: "0.05em" }}>
+        {"★".repeat(full)}{half ? "½" : ""}{"☆".repeat(5 - full - (half ? 1 : 0))}{" "}
+        <span style={{ color: "var(--color-outline)", fontSize: "0.7rem" }}>({rating.toFixed(1)})</span>
+      </span>
     );
-    return nameMatch || techMatch;
-  });
+  };
 
   return (
     <>
@@ -135,13 +174,13 @@ function DeveloperDirectory() {
           display: grid;
           gap: 0.75rem;
           animation: shimmer 1.6s infinite;
-          background-image: linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 100%);
+          background-image: linear-gradient(90deg, var(--color-surface-container-low) 0%, var(--color-surface-container) 50%, var(--color-surface-container-low) 100%);
           background-size: 200% 100%;
         }
         .skeleton-line {
           height: 12px;
           border-radius: 6px;
-          background: rgba(255,255,255,0.08);
+          background: var(--color-surface-container-highest);
         }
         .skeleton-line.large { height: 20px; width: 65%; }
         .skeleton-line.medium { width: 45%; }
@@ -151,7 +190,7 @@ function DeveloperDirectory() {
           100% { background-position: -200% 0; }
         }
       `}</style>
-      
+
       <Sidebar activePage="Developer Directory" role="client" />
 
       {selectedDeveloper ? (
@@ -240,20 +279,49 @@ function DeveloperDirectory() {
       ) : null}
 
       <main className="sidebar-layout-main" style={{ marginLeft: "256px", flex: 1, padding: "calc(96px + 3rem) 3rem 3rem 3rem", position: "relative" }}>
-        
+
         {/* HEADER AREA */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "4rem", flexWrap: "wrap", gap: "2rem" }}>
           <h1 style={{ fontFamily: "var(--font-headline)", fontSize: "3.5rem", letterSpacing: "-0.02em", color: "var(--color-on-surface)", margin: 0, lineHeight: 1 }}>
-            Elite Engineers<br/>Available
+            Elite Engineers<br />Available
           </h1>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-            <input 
-              type="text" 
-              placeholder="Search skills or names..." 
+            <input
+              type="text"
+              placeholder="Search skills or names..."
               className="search-bar-neon"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+            <select
+              value={availabilityFilter}
+              onChange={(e) => setAvailabilityFilter(e.target.value)}
+              style={{ padding: "0.65rem 0.75rem", borderRadius: "6px", border: "1px solid var(--color-outline-variant)", background: "var(--color-surface)", color: "var(--color-on-surface)", cursor: "pointer", fontSize: "0.8rem" }}
+            >
+              <option value="">All Status</option>
+              <option value="AVAILABLE">Available</option>
+              <option value="BUSY">Busy</option>
+              <option value="UNAVAILABLE">Unavailable</option>
+            </select>
+            <select
+              value={minExperience}
+              onChange={(e) => setMinExperience(e.target.value)}
+              style={{ padding: "0.65rem 0.75rem", borderRadius: "6px", border: "1px solid var(--color-outline-variant)", background: "var(--color-surface)", color: "var(--color-on-surface)", cursor: "pointer", fontSize: "0.8rem" }}
+            >
+              <option value="">Any Experience</option>
+              <option value="1">1+ Years</option>
+              <option value="3">3+ Years</option>
+              <option value="5">5+ Years</option>
+              <option value="10">10+ Years</option>
+            </select>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              style={{ padding: "0.65rem 0.75rem", borderRadius: "6px", border: "1px solid var(--color-outline-variant)", background: "var(--color-surface)", color: "var(--color-on-surface)", cursor: "pointer", fontSize: "0.8rem" }}
+            >
+              <option value="default">Sort: Default</option>
+              <option value="rating">Sort: Rating</option>
+            </select>
             <button
               type="button"
               onClick={loadDirectory}
@@ -273,7 +341,7 @@ function DeveloperDirectory() {
                 opacity: isLoading ? 0.6 : 1,
               }}
             >
-              {isLoading ? "Refreshing..." : "Refresh"}
+              {isLoading ? "Refreshing..." : "Apply Filters"}
             </button>
           </div>
         </div>
@@ -296,126 +364,175 @@ function DeveloperDirectory() {
           </div>
         ) : filteredDevs.length > 0 ? (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "2rem" }}>
-            {filteredDevs.map((dev) => (
-              <div
-                key={dev.developerID}
-                className="dev-card-monolith"
-                onClick={() => navigate(`/developers/${dev.developerID}`)}
-                style={{ cursor: "pointer" }}
-              >
-                
-                {/* Top: Name & Rate */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div>
-                    <h2 style={{ fontFamily: "var(--font-headline)", fontSize: "1.5rem", margin: "0 0 0.5rem 0" }}>{dev.user?.fullName || "Anonymous Dev"}</h2>
-                    <p style={{ color: "var(--color-on-surface-variant)", fontSize: "0.9rem", margin: 0 }}>
-                      {dev.availabilityStatus
-                        ? dev.availabilityStatus.replace("_", " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase())
-                        : "Available"}
+            {pagedDevs.map((dev) => {
+              const availLabel = dev.availabilityStatus === "AVAILABLE"
+                ? "Available" : dev.availabilityStatus === "BUSY"
+                  ? "Busy" : "Unavailable";
+              const availColor = dev.availabilityStatus === "AVAILABLE"
+                ? "var(--color-secondary)" : dev.availabilityStatus === "BUSY"
+                  ? "var(--color-primary)" : "var(--color-outline)";
+              const skills = (dev.knownTechs || []).slice(0, 4);
+              const extraSkills = (dev.knownTechs || []).length - 4;
+
+              return (
+                <div
+                  key={dev.developerID}
+                  style={{
+                    background: "var(--color-surface-container-low)",
+                    borderRadius: "8px",
+                    border: "1px solid var(--color-outline-variant)",
+                    borderLeft: "3px solid var(--color-secondary)",
+                    display: "flex",
+                    flexDirection: "column",
+                    transition: "border-color 0.2s, box-shadow 0.2s",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => navigate(`/developers/${dev.developerID}`)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderLeftColor = "var(--color-primary)";
+                    e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.12)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderLeftColor = "var(--color-secondary)";
+                    e.currentTarget.style.boxShadow = "none";
+                  }}
+                >
+                  {/* BODY */}
+                  <div style={{ padding: "1.4rem 1.6rem", display: "flex", flexDirection: "column", gap: "0.85rem", flex: 1 }}>
+
+                    {/* HEADER ROW */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                      {dev.user?.profileImageUrl ? (
+                        <img src={dev.user.profileImageUrl} alt={dev.user?.fullName} style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: "1px solid var(--color-outline-variant)" }} />
+                      ) : (
+                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--color-surface-container-highest)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: 700, color: "var(--color-on-surface)", flexShrink: 0 }}>
+                          {getInitials(dev.user?.fullName || "Dev")}
+                        </div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <h2 style={{ fontFamily: "var(--font-headline)", fontSize: "1rem", fontWeight: 700, margin: 0, color: "var(--color-on-surface)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {dev.user?.fullName || "Developer"}
+                        </h2>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "var(--color-outline)", fontFamily: "var(--font-body)" }}>
+                          {dev.experienceYears ?? 0} yrs exp
+                          <span style={{ margin: "0 0.4rem", color: "var(--color-outline-variant)" }}>·</span>
+                          <span style={{ color: availColor, fontWeight: 600 }}>{availLabel}</span>
+                        </p>
+                      </div>
+                      <span style={{ fontFamily: "var(--font-headline)", fontWeight: 700, fontSize: "0.95rem", color: "var(--color-on-surface)", letterSpacing: "-0.02em", flexShrink: 0 }}>
+                        ${dev.hourlyRate || "0"}<span style={{ fontSize: "0.65rem", fontWeight: 400, color: "var(--color-outline)" }}>/hr</span>
+                      </span>
+                    </div>
+
+                    {/* BIO */}
+                    <p style={{ fontSize: "0.84rem", lineHeight: 1.6, color: "var(--color-secondary)", fontFamily: "var(--font-body)", margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                      {dev.bio || "No bio provided yet."}
                     </p>
-                  </div>
-                  <div style={{ color: "var(--color-primary)", fontWeight: "bold", fontSize: "1.2rem", fontFamily: "var(--font-headline)" }}>
-                    ${dev.hourlyRate || "0"}/hr
-                  </div>
-                </div>
 
-                {/* Skills */}
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "auto" }}>
-                  {(dev.knownTechs || []).slice(0, 3).map((kt, idx) => (
-                    <span
-                      key={kt.techID || kt.tech?.techName || idx}
-                      style={{
-                      fontFamily: "var(--font-body)",
-                      fontSize: "0.6875rem",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.1em",
-                      background: "var(--color-surface)",
-                      padding: "0.25rem 0.5rem",
-                      borderRadius: "4px",
-                      color: "var(--color-on-surface-variant)"
-                      }}
-                    >
-                      {kt.tech?.techName || "Tech"}
-                    </span>
-                  ))}
-                  {(dev.knownTechs || []).length > 3 && (
-                    <span style={{ fontSize: "0.6875rem", padding: "0.25rem", color: "var(--color-outline)" }}>
-                      +{(dev.knownTechs || []).length - 3} more
-                    </span>
-                  )}
-                </div>
-
-                <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.75rem", fontSize: "0.7rem", color: "var(--color-outline)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                  {dev.portfolioURL ? <span>Portfolio</span> : null}
-                  {dev.cvUrl ? <span>CV</span> : null}
-                  {!dev.portfolioURL && !dev.cvUrl ? <span>Profile only</span> : null}
-                </div>
-
-                {(dev.portfolioURL || dev.cvUrl) ? (
-                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.75rem" }}>
-                    {dev.portfolioURL ? (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(dev.portfolioURL, "_blank", "noopener,noreferrer");
-                        }}
-                        style={{
-                          padding: "0.4rem 0.8rem",
-                          borderRadius: "4px",
-                          border: "1px solid var(--color-outline-variant)",
-                          background: "var(--color-surface-container-highest)",
-                          color: "var(--color-on-surface)",
-                          cursor: "pointer",
-                          fontFamily: "var(--font-headline)",
-                          fontSize: "0.7rem",
-                        }}
-                      >
-                        View Portfolio
-                      </button>
-                    ) : null}
-                    {dev.cvUrl ? (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(dev.cvUrl, "_blank", "noopener,noreferrer");
-                        }}
-                        style={{
-                          padding: "0.4rem 0.8rem",
-                          borderRadius: "4px",
-                          border: "1px solid var(--color-outline-variant)",
-                          background: "var(--color-surface-container-highest)",
-                          color: "var(--color-on-surface)",
-                          cursor: "pointer",
-                          fontFamily: "var(--font-headline)",
-                          fontSize: "0.7rem",
-                        }}
-                      >
-                        View CV
-                      </button>
+                    {/* SKILLS */}
+                    {skills.length > 0 ? (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                        {skills.map((kt, i) => (
+                          <span key={kt.techID || i} style={{ fontSize: "0.62rem", fontWeight: 600, textTransform: "uppercase", padding: "2px 7px", color: "var(--color-on-surface-variant)", fontFamily: "var(--font-label)", background: "var(--color-surface-container)", borderRadius: "3px", letterSpacing: "0.06em" }}>
+                            {kt.tech?.techName || "Tech"}
+                          </span>
+                        ))}
+                        {extraSkills > 0 ? (
+                          <span style={{ fontSize: "0.62rem", color: "var(--color-outline)", padding: "2px 3px", fontFamily: "var(--font-label)" }}>+{extraSkills}</span>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
-                ) : null}
 
-                <div style={{ marginTop: "1rem" }}>
-                  <button
-                    className="neon-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedDeveloper(dev);
-                    }}
-                  >
-                    Invite to Contract
-                  </button>
+                  {/* FOOTER */}
+                  <div style={{ padding: "0.85rem 1.6rem", borderTop: "1px solid var(--color-outline-variant)", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {dev.averageRating ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                          {renderStars(dev.averageRating)}
+                          <span style={{ fontSize: "0.68rem", color: "var(--color-outline)", fontFamily: "var(--font-body)" }}>
+                            {Number(dev.averageRating).toFixed(1)} ({dev.reviewCount ?? 0})
+                          </span>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: "0.68rem", color: "var(--color-outline)" }}>No reviews yet</span>
+                      )}
+                      <div style={{ display: "flex", gap: "0.5rem", marginTop: "3px" }}>
+                        {dev.portfolioURL ? <span style={{ fontSize: "0.62rem", color: "var(--color-outline)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Portfolio</span> : null}
+                        {dev.cvUrl ? <span style={{ fontSize: "0.62rem", color: "var(--color-outline)", textTransform: "uppercase", letterSpacing: "0.06em" }}>CV</span> : null}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
+                      {dev.portfolioURL ? (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); window.open(dev.portfolioURL, "_blank", "noopener,noreferrer"); }}
+                          style={{ padding: "0.45rem 0.75rem", background: "transparent", border: "1px solid var(--color-outline-variant)", borderRadius: "5px", cursor: "pointer", fontFamily: "var(--font-headline)", fontWeight: 700, fontSize: "0.68rem", color: "var(--color-on-surface)", letterSpacing: "0.04em" }}
+                        >
+                          Portfolio
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setSelectedDeveloper(dev); }}
+                        style={{ padding: "0.45rem 0.9rem", background: "var(--color-primary)", border: "none", borderRadius: "5px", cursor: "pointer", fontFamily: "var(--font-headline)", fontWeight: 700, fontSize: "0.68rem", color: "var(--color-on-primary)", letterSpacing: "0.04em" }}
+                      >
+                        Invite
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
-             <div style={{ padding: "4rem", textAlign: "center", background: "var(--color-surface-container-lowest)", borderRadius: "8px" }}>
-              <p style={{ color: "var(--color-outline)" }}>No engineers found matching your query.</p>
-            </div>
+          <div style={{ padding: "4rem", textAlign: "center", background: "var(--color-surface-container-lowest)", borderRadius: "8px" }}>
+            <p style={{ color: "var(--color-outline)" }}>No engineers found matching your query.</p>
+          </div>
+        )}
+
+        {/* PAGINATION */}
+        {!isLoading && totalPages > 1 && (
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem", marginTop: "2rem", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{ padding: "0.5rem 1rem", borderRadius: "6px", border: "1px solid var(--color-outline-variant)", background: "transparent", color: currentPage === 1 ? "var(--color-outline)" : "var(--color-on-surface)", cursor: currentPage === 1 ? "not-allowed" : "pointer", fontFamily: "var(--font-headline)", fontSize: "0.75rem" }}
+            >
+              ← Prev
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+              .reduce((acc, p, i, arr) => {
+                if (i > 0 && p - arr[i - 1] > 1) acc.push("...");
+                acc.push(p);
+                return acc;
+              }, [])
+              .map((p, i) => p === "..." ? (
+                <span key={`ellipsis-${i}`} style={{ color: "var(--color-outline)", padding: "0 0.25rem" }}>…</span>
+              ) : (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setCurrentPage(p)}
+                  style={{ padding: "0.5rem 0.85rem", borderRadius: "6px", border: `1px solid ${currentPage === p ? "var(--color-primary)" : "var(--color-outline-variant)"}`, background: currentPage === p ? "var(--color-primary)" : "transparent", color: currentPage === p ? "var(--color-on-primary)" : "var(--color-on-surface)", cursor: "pointer", fontFamily: "var(--font-headline)", fontSize: "0.75rem", fontWeight: 700 }}
+                >
+                  {p}
+                </button>
+              ))}
+            <button
+              type="button"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              style={{ padding: "0.5rem 1rem", borderRadius: "6px", border: "1px solid var(--color-outline-variant)", background: "transparent", color: currentPage === totalPages ? "var(--color-outline)" : "var(--color-on-surface)", cursor: currentPage === totalPages ? "not-allowed" : "pointer", fontFamily: "var(--font-headline)", fontSize: "0.75rem" }}
+            >
+              Next →
+            </button>
+            <span style={{ fontSize: "0.72rem", color: "var(--color-outline)", marginLeft: "0.5rem" }}>
+              {filteredDevs.length} developer{filteredDevs.length !== 1 ? "s" : ""} · Page {currentPage} of {totalPages}
+            </span>
+          </div>
         )}
       </main>
     </>

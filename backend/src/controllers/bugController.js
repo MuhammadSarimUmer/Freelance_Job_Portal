@@ -98,22 +98,11 @@ const createBug = async (req, res) => {
             }
         }
 
-        if (role === 'DEVELOPER') {
-            const developer = await prisma.developer.findUnique({
-                where: { userID: userId },
-                select: { developerID: true }
+        if (role !== 'CLIENT') {
+            return res.status(403).json({
+                success: false,
+                message: 'Only clients can create bug reports'
             });
-
-            const isAssigned = contract.assignments.some(
-                a => a.developerID === developer?.developerID
-            );
-
-            if (!developer || !isAssigned) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Forbidden - You are not assigned to this contract'
-                });
-            }
         }
 
         const bug = await prisma.bugReport.create({
@@ -173,9 +162,18 @@ const getBugs = async (req, res) => {
         }
 
         if (role === 'DEVELOPER') {
+            const developer = await prisma.developer.findUnique({
+                where: { userID: userId },
+                select: { developerID: true }
+            });
+
+            if (!developer) {
+                return res.status(404).json({ success: false, message: 'Developer profile not found' });
+            }
+
             whereClause.contract = {
                 ...whereClause.contract,
-                assignments: { some: { developerID: userId } }
+                assignments: { some: { developerID: developer.developerID } }
             };
         }
 
@@ -294,6 +292,13 @@ const updateBugStatus = async (req, res) => {
             return res.status(access.status).json({
                 success: false,
                 message: access.error
+            });
+        }
+
+        if ((status === 'RESOLVED' || status === 'CLOSED') && role !== 'CLIENT') {
+            return res.status(403).json({
+                success: false,
+                message: 'Only clients can resolve or close bug reports'
             });
         }
 

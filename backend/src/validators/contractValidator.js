@@ -30,7 +30,7 @@ const createContractValidator = [
         .isISO8601().withMessage('Invalid date format'),
 
     body('endDate')
-        .optional()
+        .optional({ nullable: true, checkFalsy: true })
         .isISO8601().withMessage('Invalid date format'),
 
     body('totalAmount')
@@ -63,7 +63,7 @@ const updateContractValidator = [
         .withMessage('Invalid date'),
 
     body('endDate')
-        .optional()
+        .optional({ nullable: true, checkFalsy: true })
         .isISO8601()
         .withMessage('Invalid date'),
 

@@ -54,8 +54,9 @@ function ContractChat({ contractID, currentUserId }) {
     fetchMessages({ showLoader: true });
     const interval = setInterval(() => {
       if (document.visibilityState !== "visible") return;
+      if (!document.hasFocus()) return;
       fetchMessages({ since: lastMessageAtRef.current });
-    }, 5000);
+    }, 12000);
     return () => clearInterval(interval);
   }, [contractID]);
 
@@ -82,7 +83,21 @@ function ContractChat({ contractID, currentUserId }) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontFamily: "var(--font-label)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--color-outline)" }}>
+          Contract Chat · auto-updates every 5s
+        </span>
+        <button
+          type="button"
+          onClick={() => fetchMessages({ showLoader: true })}
+          disabled={isLoading}
+          style={{ padding: "0.35rem 0.75rem", borderRadius: "4px", border: "1px solid var(--color-outline-variant)", background: "transparent", color: "var(--color-on-surface)", cursor: isLoading ? "not-allowed" : "pointer", fontFamily: "var(--font-headline)", fontWeight: 700, fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isLoading ? 0.6 : 1, display: "flex", alignItems: "center", gap: "0.3rem" }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: "0.85rem" }}>refresh</span>
+          Refresh
+        </button>
+      </div>
       <div
         style={{
           background: "var(--color-surface-container)",

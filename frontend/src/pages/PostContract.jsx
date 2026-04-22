@@ -245,8 +245,23 @@ const PostContract = () => {
         addToast("Fill in Title, Description, Budget, and Start Date before submitting.", "error");
         return;
       }
+      if (formData.title.trim().length < 3) {
+        addToast("Contract title must be at least 3 characters.", "error");
+        return;
+      }
       if (!formData.appName) {
         addToast("App name is required in Step 1.", "error");
+        return;
+      }
+      const startDateObj = new Date(formData.startDate);
+      const todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
+      if (startDateObj < todayDate) {
+        addToast("Start date cannot be in the past.", "error");
+        return;
+      }
+      if (formData.endDate && new Date(formData.endDate) <= startDateObj) {
+        addToast("End date must be after start date.", "error");
         return;
       }
       if (milestones.length === 0) {
@@ -326,11 +341,15 @@ const PostContract = () => {
   const appTypeLabel = appTypeLabelMap[formData.appType] || "Web Application";
 
   const isStep1Complete = Boolean(formData.appName.trim()) && Boolean(formData.description.trim());
-  const isStep2Complete = Boolean(formData.title.trim()) && Boolean(formData.description.trim()) && budgetValue > 0 && Boolean(formData.startDate);
+  const isStep2Complete = formData.title.trim().length >= 3 && Boolean(formData.description.trim()) && budgetValue > 0 && Boolean(formData.startDate);
   const isStep3Complete = milestones.length > 0 && (budgetValue === 0 || totalMilestoneAmount <= budgetValue);
   const canContinue = step === 1 ? isStep1Complete : step === 2 ? isStep2Complete : step === 3 ? isStep3Complete : true;
 
   const handleStepChange = (nextStep) => {
+    if (nextStep === 2 && step === 1 && !formData.title.trim() && formData.appName.trim()) {
+      setFormData((prev) => ({ ...prev, title: prev.appName.trim() }));
+    }
+
     if (nextStep <= step) {
       setStep(nextStep);
       return;
@@ -360,10 +379,13 @@ const PostContract = () => {
       gap: 3rem;
     }
     .tech-add-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+      display: flex;
+      flex-direction: column;
       gap: 0.75rem;
-      align-items: center;
+    }
+    .tech-add-btn {
+      align-self: flex-start;
+      padding: 0.6rem 1.5rem;
     }
     .input-field {
       width: 100%;
@@ -394,11 +416,6 @@ const PostContract = () => {
     }
     @media (max-width: 1024px) {
       .post-contract-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-    @media (max-width: 900px) {
-      .tech-add-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -643,8 +660,8 @@ const PostContract = () => {
                             (e.target.style.borderBottomColor = "var(--color-secondary)")
                           }
                           onBlur={(e) =>
-                            (e.target.style.borderBottomColor =
-                              "var(--color-outline-variant-strong)")
+                          (e.target.style.borderBottomColor =
+                            "var(--color-outline-variant-strong)")
                           }
                         />
                       </div>
@@ -724,8 +741,8 @@ const PostContract = () => {
                           (e.target.style.borderBottomColor = "var(--color-secondary)")
                         }
                         onBlur={(e) =>
-                          (e.target.style.borderBottomColor =
-                            "var(--color-outline-variant-strong)")
+                        (e.target.style.borderBottomColor =
+                          "var(--color-outline-variant-strong)")
                         }
                       />
                     </div>
@@ -753,19 +770,22 @@ const PostContract = () => {
                       Contract Info
                     </h3>
                     <div>
-                      <label
-                        style={{
-                          display: "block",
-                          fontSize: "0.65rem",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.2em",
-                          color: "var(--color-outline)",
-                          fontFamily: "var(--font-label)",
-                          marginBottom: "0.75rem",
-                        }}
-                      >
-                        Contract Title
-                      </label>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                        <label
+                          style={{
+                            fontSize: "0.65rem",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.2em",
+                            color: "var(--color-outline)",
+                            fontFamily: "var(--font-label)",
+                          }}
+                        >
+                          Contract Title
+                        </label>
+                        <span style={{ fontSize: "0.7rem", color: "var(--color-outline)", fontFamily: "var(--font-body)" }}>
+                          — describes the work engagement (auto-filled from app name, editable)
+                        </span>
+                      </div>
                       <input
                         name="title"
                         value={formData.title}
@@ -789,8 +809,8 @@ const PostContract = () => {
                           (e.target.style.borderBottomColor = "var(--color-secondary)")
                         }
                         onBlur={(e) =>
-                          (e.target.style.borderBottomColor =
-                            "var(--color-outline-variant-strong)")
+                        (e.target.style.borderBottomColor =
+                          "var(--color-outline-variant-strong)")
                         }
                       />
                     </div>
@@ -818,6 +838,7 @@ const PostContract = () => {
                         <input
                           name="startDate"
                           type="date"
+                          min={new Date().toISOString().slice(0, 10)}
                           value={formData.startDate}
                           onChange={handleInput}
                           style={{
@@ -833,11 +854,11 @@ const PostContract = () => {
                             transition: "border-color 0.3s ease",
                           }}
                           onFocus={(e) =>
-                          (e.target.style.borderBottomColor = "var(--color-secondary)")
+                            (e.target.style.borderBottomColor = "var(--color-secondary)")
                           }
                           onBlur={(e) =>
-                            (e.target.style.borderBottomColor =
-                              "var(--color-outline-variant-strong)")
+                          (e.target.style.borderBottomColor =
+                            "var(--color-outline-variant-strong)")
                           }
                         />
                       </div>
@@ -858,6 +879,7 @@ const PostContract = () => {
                         <input
                           name="endDate"
                           type="date"
+                          min={formData.startDate || new Date().toISOString().slice(0, 10)}
                           value={formData.endDate}
                           onChange={handleInput}
                           style={{
@@ -873,11 +895,11 @@ const PostContract = () => {
                             transition: "border-color 0.3s ease",
                           }}
                           onFocus={(e) =>
-                          (e.target.style.borderBottomColor = "var(--color-secondary)")
+                            (e.target.style.borderBottomColor = "var(--color-secondary)")
                           }
                           onBlur={(e) =>
-                            (e.target.style.borderBottomColor =
-                              "var(--color-outline-variant-strong)")
+                          (e.target.style.borderBottomColor =
+                            "var(--color-outline-variant-strong)")
                           }
                         />
                       </div>
@@ -917,8 +939,8 @@ const PostContract = () => {
                             (e.target.style.borderBottomColor = "var(--color-secondary)")
                           }
                           onBlur={(e) =>
-                            (e.target.style.borderBottomColor =
-                              "var(--color-outline-variant-strong)")
+                          (e.target.style.borderBottomColor =
+                            "var(--color-outline-variant-strong)")
                           }
                         />
                       </div>
@@ -938,7 +960,7 @@ const PostContract = () => {
                         </label>
                         <div className="tech-add-grid" style={{ marginBottom: "0.75rem" }}>
                           <input
-                            placeholder="Add a tech (e.g. Rust)"
+                            placeholder="Tech name (e.g. Rust)"
                             value={customTechName}
                             onChange={(e) => setCustomTechName(e.target.value)}
                             className="input-field"
@@ -955,12 +977,12 @@ const PostContract = () => {
                             type="button"
                             onClick={handleCreateTechnology}
                             disabled={isCreatingTech}
+                            className="tech-add-btn"
                             style={{
                               background: "var(--color-surface-container-high)",
                               color: "var(--color-primary)",
                               border: "none",
                               borderRadius: "4px",
-                              padding: "0 1.5rem",
                               fontFamily: "var(--font-headline)",
                               fontWeight: 700,
                               cursor: isCreatingTech ? "not-allowed" : "pointer",
@@ -969,7 +991,7 @@ const PostContract = () => {
                               letterSpacing: "0.08em",
                             }}
                           >
-                            {isCreatingTech ? "Adding..." : "Add"}
+                            {isCreatingTech ? "Adding..." : "Add New Tech"}
                           </button>
                         </div>
                         <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.75rem" }}>

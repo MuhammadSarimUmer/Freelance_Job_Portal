@@ -219,11 +219,11 @@ function LoginSignup() {
                 marginBottom: "2rem",
               }}
             >
-              CRAFT YOUR
+              BUILD WHAT
               <br />
-              <span style={{ color: "var(--color-primary)" }}>LEGACY</span>
+              <span style={{ color: "var(--color-primary)" }}>MATTERS.</span>
               <br />
-              IN CODE.
+              SHIP FASTER.
             </h1>
             <p
               style={{
@@ -233,8 +233,7 @@ function LoginSignup() {
                 lineHeight: 1.7,
               }}
             >
-              A curated ecosystem where engineering precision meets editorial
-              flair.
+              The professional platform connecting companies with verified software talent — from MVP to production.
             </p>
 
             <div
@@ -248,9 +247,7 @@ function LoginSignup() {
               <p
                 style={{ fontSize: "1.25rem", lineHeight: 1.6, marginBottom: "2rem" }}
               >
-                "Codex isn't just a platform; it's a statement of
-                engineering intent. Where elite talent builds software that
-                matters."</p>
+                "We hired three senior developers through Codex in under two weeks. The escrow system gave us full control over payments, and every milestone was tracked end-to-end."</p>
               <div
                 style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
               >
@@ -269,7 +266,7 @@ function LoginSignup() {
                     borderRadius: "4px",
                   }}
                 >
-                  JV
+                  SR
                 </div>
                 <div>
                   <p
@@ -281,7 +278,7 @@ function LoginSignup() {
                       color: "var(--color-on-surface)",
                     }}
                   >
-                    Julian Voss
+                    Sarah Reynolds
                   </p>
                   <p
                     style={{
@@ -290,7 +287,7 @@ function LoginSignup() {
                       textTransform: "uppercase",
                     }}
                   >
-                    Principal Architect
+                    CTO, NovaBuild Inc.
                   </p>
                 </div>
               </div>
@@ -299,7 +296,7 @@ function LoginSignup() {
 
           <div style={{ marginTop: "3rem", textAlign: "center" }}>
             <p style={{ fontSize: "0.75rem", color: "var(--color-outline)", fontFamily: "var(--font-body)" }}>
-              © 2024 Codex
+              © 2026 Codex
             </p>
           </div>
         </div>
@@ -782,7 +779,7 @@ function LoginSignup() {
                   }
                   onMouseLeave={(e) => !isProcessing && (e.target.style.filter = "brightness(1)")}
                 >
-                  {isProcessing ? "Authenticating..." : (activeTab === "login" ? "Enter Nexus" : "Initialize Identity")}
+                  {isProcessing ? "Authenticating..." : (activeTab === "login" ? "Sign In" : "Create Account")}
                 </button>
 
                 <div

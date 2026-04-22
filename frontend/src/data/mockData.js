@@ -4,7 +4,7 @@
 export const developerNav = [
   { icon: "dashboard", label: "Dashboard", path: "/developer/dashboard" },
   { icon: "work", label: "Open Contracts", path: "/jobs" },
-  { icon: "assignment", label: "My Proposals", path: "/developer/applications" },
+  { icon: "assignment", label: "Proposals & Invites", path: "/developer/applications" },
   { icon: "bug_report", label: "Bug Reports", path: "/bug-reports" },
   { icon: "celebration", label: "Milestones", path: "/milestones" },
   { icon: "payments", label: "Transactions", path: "/earnings" },

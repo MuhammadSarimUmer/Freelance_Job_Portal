@@ -439,6 +439,13 @@ const updateMilestoneStatus = async (req, res) => {
                 });
             }
 
+            if (ownership.milestone.status === 'COMPLETED') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'This milestone is already completed and cannot be changed'
+                });
+            }
+
             if (status === 'COMPLETED') {
                 updateData.completeDate = new Date();
             }

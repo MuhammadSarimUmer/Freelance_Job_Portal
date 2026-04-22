@@ -181,6 +181,13 @@ const resolveDispute = async (req, res) => {
 
         await assertContractAccess(dispute.contractID, req.user.userId, req.user.role);
 
+        if (['RESOLVED', 'CLOSED'].includes(status) && dispute.raisedByID !== req.user.userId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Only the person who raised this dispute can resolve or close it'
+            });
+        }
+
         const updateData = {
             status,
             resolution: resolution ? resolution.trim() : null

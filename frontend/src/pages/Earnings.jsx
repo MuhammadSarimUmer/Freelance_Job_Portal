@@ -40,47 +40,48 @@ function Earnings() {
     }
   };
 
+  const fetchEscrows = async () => {
+    try {
+      setIsLoading(true);
+      const res = await escrowService.getEscrowHistory();
+      const history = res.data?.data || res.data || [];
+
+      const txns = history.map((e) => {
+        const paymentStatus = mapPaymentStatus(e.paymentStatus);
+        const payout = Array.isArray(e.payouts) ? e.payouts[0] : null;
+        const payoutAmount = payout?.amount ?? e.depositAmount;
+        const amountNum = Number(payoutAmount ?? 0);
+        const depositAmount = `$${Number.isFinite(amountNum) ? amountNum.toFixed(2).replace(/\\.00$/, "") : "0"}`;
+        const shareNum = Number(payout?.sharePercent ?? 100);
+        const paymentShare = `${Number.isFinite(shareNum) ? shareNum : 100}%`;
+
+        return {
+          escrowId: e.escrowID,
+          milestoneTitle: e.milestone?.title || "Milestone",
+          milestoneId: e.milestone?.milestoneID || null,
+          contractId: e.milestone?.contract?.contractID || null,
+          depositAmount,
+          paymentShare,
+          paymentStatus,
+          transactionRef: e.transactionReference || null,
+          depositDate: formatDate(e.depositDate),
+          releaseDate: formatDate(e.releaseDate),
+        };
+      });
+
+      setEarningsTransactions(txns);
+    } catch (err) {
+      console.error("Failed to load earnings:", err);
+      addToast(err?.response?.data?.message || "Failed to load earnings.", "error");
+      setEarningsTransactions([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchEscrows = async () => {
-      try {
-        setIsLoading(true);
-        const res = await escrowService.getEscrowHistory();
-        const history = res.data?.data || res.data || [];
-
-        const txns = history.map((e) => {
-          const paymentStatus = mapPaymentStatus(e.paymentStatus);
-          const payout = Array.isArray(e.payouts) ? e.payouts[0] : null;
-          const payoutAmount = payout?.amount ?? e.depositAmount;
-          const amountNum = Number(payoutAmount ?? 0);
-          const depositAmount = `$${Number.isFinite(amountNum) ? amountNum.toFixed(2).replace(/\\.00$/, "") : "0"}`;
-          const shareNum = Number(payout?.sharePercent ?? 100);
-          const paymentShare = `${Number.isFinite(shareNum) ? shareNum : 100}%`;
-
-          return {
-            escrowId: e.escrowID,
-            milestoneTitle: e.milestone?.title || "Milestone",
-            milestoneId: e.milestone?.milestoneID || null,
-            contractId: e.milestone?.contract?.contractID || null,
-            depositAmount,
-            paymentShare,
-            paymentStatus,
-            transactionRef: e.transactionReference || null,
-            depositDate: formatDate(e.depositDate),
-            releaseDate: formatDate(e.releaseDate),
-          };
-        });
-
-        setEarningsTransactions(txns);
-      } catch (err) {
-        console.error("Failed to load earnings:", err);
-        addToast(err?.response?.data?.message || "Failed to load earnings.", "error");
-        setEarningsTransactions([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchEscrows();
-  }, [addToast]);
+  }, []);
 
   const filtered = useMemo(() => {
     return activeTab === "All"
@@ -179,6 +180,15 @@ function Earnings() {
           >
             Escrow transactions and payment history
           </p>
+          <button
+            type="button"
+            onClick={fetchEscrows}
+            disabled={isLoading}
+            style={{ marginTop: "1.25rem", padding: "0.6rem 1.1rem", borderRadius: "5px", border: "1px solid var(--color-outline-variant)", background: "transparent", color: "var(--color-on-surface)", cursor: isLoading ? "not-allowed" : "pointer", fontFamily: "var(--font-headline)", fontWeight: 700, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isLoading ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: "0.95rem" }}>refresh</span>
+            {isLoading ? "Loading..." : "Refresh"}
+          </button>
         </header>
 
         {isLoading ? (

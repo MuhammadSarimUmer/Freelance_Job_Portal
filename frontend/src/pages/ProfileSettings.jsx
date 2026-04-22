@@ -30,6 +30,7 @@ function ProfileSettings() {
     country: "",
     availabilityStatus: "AVAILABLE",
     experienceYears: "",
+    bio: "",
   });
 
   const [skills, setSkills] = useState([]); // [{ techID, techName, proficiencyLevel, yearsExperience }]
@@ -82,6 +83,7 @@ function ProfileSettings() {
         country: "",
         availabilityStatus: user.developer?.availabilityStatus || "AVAILABLE",
         experienceYears: user.developer?.experienceYears?.toString?.() ?? "",
+        bio: user.developer?.bio || "",
       });
       const knownTechs = user.developer?.knownTechs || [];
       setSkills(
@@ -109,6 +111,7 @@ function ProfileSettings() {
         country: user.client?.country || "",
         availabilityStatus: "AVAILABLE",
         experienceYears: "",
+        bio: user.client?.bio || "",
       });
       setSkills([]);
       setDraftSkillEdits({});
@@ -401,6 +404,7 @@ function ProfileSettings() {
         if (!removePortfolio && formData.portfolioURL.trim() !== "") fd.append("portfolioURL", formData.portfolioURL.trim());
         if (formData.availabilityStatus) fd.append("availabilityStatus", formData.availabilityStatus);
         if (formData.experienceYears.trim() !== "") fd.append("experienceYears", formData.experienceYears.trim());
+        if (formData.bio.trim() !== "") fd.append("bio", formData.bio.trim());
 
         if (removeProfileImage) fd.append("removeProfileImage", "true");
         if (removeCv) fd.append("removeCv", "true");
@@ -414,6 +418,7 @@ function ProfileSettings() {
         if (formData.companyName.trim() !== "") fd.append("companyName", formData.companyName.trim());
         if (formData.billingAddress.trim() !== "") fd.append("billingAddress", formData.billingAddress.trim());
         if (formData.country.trim() !== "") fd.append("country", formData.country.trim());
+        fd.append("bio", formData.bio.trim());
 
         if (removeProfileImage) fd.append("removeProfileImage", "true");
         if (profileImageFile) fd.append("file", profileImageFile);
@@ -595,7 +600,7 @@ function ProfileSettings() {
               position: "fixed", top: "10%", right: "-10%", width: "500px", height: "500px", zIndex: 0, opacity: 0.5
             }}
           />
-          
+
           <div style={{ position: "relative", zIndex: 1, maxWidth: "800px" }}>
             <SectionHeader
               title="Profile Settings"
@@ -604,7 +609,7 @@ function ProfileSettings() {
 
             <div className="settings-form-container">
               <div style={{ display: "flex", flexDirection: "column", gap: "2.5rem" }}>
-                
+
                 {/* GLOBAL FIELDS */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
                   <FormField label="Full Name">
@@ -629,10 +634,10 @@ function ProfileSettings() {
                         />
                       </FormField>
                       <FormField label="Availability Status">
-                        <select 
-                          className="input-field" 
-                          name="availabilityStatus" 
-                          value={formData.availabilityStatus} 
+                        <select
+                          className="input-field"
+                          name="availabilityStatus"
+                          value={formData.availabilityStatus}
                           onChange={handleInput}
                           style={{ WebkitAppearance: "none" }}
                         >
@@ -661,10 +666,22 @@ function ProfileSettings() {
                           }}
                         >
                           {isTogglingAvailability ? "Updating..." : "Toggle Availability"}
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDeleteAccountOpen(true)}
-                    
+                        </button>
+                      </FormField>
+                    </div>
+
+                    <FormField label="About">
+                      <textarea
+                        className="input-field"
+                        name="bio"
+                        value={formData.bio}
+                        onChange={handleInput}
+                        rows={4}
+                        style={{ minHeight: "120px", resize: "vertical" }}
+                        placeholder="Share a short professional summary for clients."
+                      />
+                    </FormField>
+
                     <FormField label="Portfolio URL">
                       <input type="url" className="input-field" name="portfolioURL" value={formData.portfolioURL} onChange={handleInput} />
                       {hasPortfolio ? (
@@ -1159,6 +1176,18 @@ function ProfileSettings() {
                       <input className="input-field" name="billingAddress" value={formData.billingAddress} onChange={handleInput} />
                     </FormField>
 
+                    <FormField label="About" hint="Write a short bio visible on your public profile.">
+                      <textarea
+                        className="input-field"
+                        name="bio"
+                        value={formData.bio}
+                        onChange={handleInput}
+                        rows={4}
+                        style={{ minHeight: "110px", resize: "vertical" }}
+                        placeholder="Tell developers about your company, what you build, and what you're looking for."
+                      />
+                    </FormField>
+
                     <FormField label="Profile Image" hint="JPEG, PNG, WebP (max 5MB).">
                       <input
                         type="file"
@@ -1200,17 +1229,17 @@ function ProfileSettings() {
                     onClick={handleSave}
                     className="signature-cta"
                     style={{
-                    padding: "1.25rem 3rem",
-                    color: "var(--color-on-primary-container)",
-                    fontFamily: "var(--font-headline)",
-                    fontWeight: 700,
-                    fontSize: "0.85rem",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.2em",
-                    border: "none",
-                    cursor: "pointer",
-                    borderRadius: "4px",
-                    opacity: authLoading ? 0.65 : 1,
+                      padding: "1.25rem 3rem",
+                      color: "var(--color-on-primary-container)",
+                      fontFamily: "var(--font-headline)",
+                      fontWeight: 700,
+                      fontSize: "0.85rem",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.2em",
+                      border: "none",
+                      cursor: "pointer",
+                      borderRadius: "4px",
+                      opacity: authLoading ? 0.65 : 1,
                     }}
                     disabled={authLoading || isSaving}
                   >

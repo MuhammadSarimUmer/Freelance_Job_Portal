@@ -153,6 +153,7 @@ model Developer {
   portfolioURL       String?
   cvUrl              String?
   availabilityStatus AvailabilityStatus    @default(AVAILABLE)
+  bio                String?               @db.Text
   user               User                  @relation(fields: [userID], references: [userID], onDelete: Cascade)
   knownTechs         DeveloperTechnology[]
   assignedProjects   ContractAssignment[]
@@ -167,6 +168,7 @@ model Client {
   companyName    String?
   billingAddress String?
   country        String
+  bio            String?           @db.Text
   user           User              @relation(fields: [userID], references: [userID], onDelete: Cascade)
   contracts      ProjectContract[]
 }
@@ -297,7 +299,7 @@ model PaymentEscrow {
   escrowID             String        @id @default(uuid())
   milestoneID          String        @unique
   depositAmount        Decimal       @db.Decimal(10, 2)
-  depositDate          DateTime      @default(now())
+  depositDate          DateTime?
   releaseDate          DateTime?
   paymentStatus        PaymentStatus @default(PENDING)
   transactionReference String?       @unique

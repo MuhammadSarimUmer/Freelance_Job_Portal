@@ -8,6 +8,7 @@ function ManageApplicationsModal({ contract, onClose }) {
   const navigate = useNavigate();
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [processingId, setProcessingId] = useState(null);
 
   useEffect(() => {
     const fetchApplications = async () => {
@@ -31,22 +32,30 @@ function ManageApplicationsModal({ contract, onClose }) {
   };
 
   const handleAccept = async (proposalId) => {
+    if (processingId) return;
     try {
+      setProcessingId(proposalId);
       await proposalService.acceptProposal(contract.contractID, proposalId);
       addToast("Proposal accepted. Developer added to the contract team.", "success");
       await refresh();
     } catch (err) {
       addToast(err?.response?.data?.message || "Failed to accept proposal.", "error");
+    } finally {
+      setProcessingId(null);
     }
   };
 
   const handleDecline = async (proposalId) => {
+    if (processingId) return;
     try {
+      setProcessingId(proposalId);
       await proposalService.declineProposal(contract.contractID, proposalId, {});
       addToast("Proposal declined.", "info");
       await refresh();
     } catch (err) {
       addToast(err?.response?.data?.message || "Failed to decline proposal.", "error");
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -139,19 +148,19 @@ function ManageApplicationsModal({ contract, onClose }) {
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
-                     <div>
+                    <div>
                       <h3 style={{ fontFamily: "var(--font-headline)", fontSize: "1.25rem", color: "var(--color-on-surface)", marginBottom: "0.5rem" }}>
                         {app.developer?.user?.fullName || "Developer"}
                       </h3>
                       <p style={{ fontFamily: "var(--font-label)", fontSize: "0.75rem", color: "var(--color-outline)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                         {app.source === "CLIENT_INVITE" ? "Client invitation" : "Developer proposal"} • {app.status}
                       </p>
-                     </div>
-                     <div style={{ textAlign: "right" }}>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
                       <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--color-outline)", fontFamily: "var(--font-body)" }}>
                         {app.proposedRate ? `$${Number(app.proposedRate).toLocaleString()}/hr` : "Rate unavailable"}
                       </p>
-                     </div>
+                    </div>
                   </div>
 
                   <p style={{ fontFamily: "var(--font-body)", fontSize: "0.9rem", color: "var(--color-on-surface-variant)", lineHeight: 1.6, marginBottom: "2rem", whiteSpace: "pre-wrap" }}>
@@ -171,20 +180,21 @@ function ManageApplicationsModal({ contract, onClose }) {
                       <>
                         <button
                           onClick={() => handleAccept(app.proposalID)}
-                          style={{ padding: "0.85rem 1.4rem", background: "var(--color-primary-container)", color: "var(--color-on-primary-container)", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 700 }}
+                          disabled={Boolean(processingId)}
+                          style={{ padding: "0.85rem 1.4rem", background: "var(--color-primary-container)", color: "var(--color-on-primary-container)", border: "none", borderRadius: "6px", cursor: processingId ? "not-allowed" : "pointer", fontWeight: 700, opacity: processingId === app.proposalID ? 0.7 : 1 }}
                         >
-                          Accept Proposal
+                          {processingId === app.proposalID ? "Accepting..." : "Accept Proposal"}
                         </button>
                         <button
                           onClick={() => handleDecline(app.proposalID)}
-                          style={{ padding: "0.85rem 1.4rem", background: "transparent", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "6px", cursor: "pointer", fontWeight: 700 }}
+                          disabled={Boolean(processingId)}
+                          style={{ padding: "0.85rem 1.4rem", background: "transparent", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)", borderRadius: "6px", cursor: processingId ? "not-allowed" : "pointer", fontWeight: 700 }}
                         >
-                          Decline
+                          {processingId === app.proposalID ? "Declining..." : "Decline"}
                         </button>
                       </>
                     ) : null}
                   </div>
-                  )
                 </div>
               );
             })}

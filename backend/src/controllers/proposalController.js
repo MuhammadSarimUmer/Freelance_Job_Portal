@@ -22,6 +22,16 @@ const contractInclude = {
                 include: {
                     tech: true
                 }
+            },
+            milestones: {
+                select: {
+                    milestoneID: true,
+                    title: true,
+                    description: true,
+                    dueDate: true,
+                    milestoneAmount: true,
+                    status: true
+                }
             }
         }
     },
@@ -336,7 +346,7 @@ const inviteDeveloper = async (req, res) => {
                     type: 'INVITATION_RECEIVED',
                     title: 'You have a new contract invitation',
                     body: `${proposal.contract?.client?.user?.fullName || 'A client'} invited you to ${proposal.contract?.title || 'a contract'}.`,
-                    link: `/contracts/${proposal.contract.contractID}`
+                    link: '/developer/applications'
                 });
             } catch (error) {
                 console.error('Invitation notification error:', error);
@@ -421,7 +431,7 @@ const acceptProposal = async (req, res) => {
             const assignment = await createAssignmentAndSign(tx, proposal);
 
             const acceptedProposal = await tx.contractProposal.update({
-                where: { proposalID },
+                where: { proposalID: proposalId },
                 data: {
                     status: 'ACCEPTED',
                     decidedAt: new Date(),
@@ -484,7 +494,7 @@ const declineProposal = async (req, res) => {
         }
 
         const updated = await prisma.contractProposal.update({
-            where: { proposalID },
+            where: { proposalID: proposalId },
             data: {
                 status: 'DECLINED',
                 declineReason: declineReason || null,
@@ -571,7 +581,7 @@ const acceptInvitation = async (req, res) => {
             const assignment = await createAssignmentAndSign(tx, proposal, proposal.role);
 
             const acceptedInvite = await tx.contractProposal.update({
-                where: { proposalID },
+                where: { proposalID: proposalId },
                 data: {
                     status: 'ACCEPTED',
                     decidedAt: new Date(),
@@ -628,7 +638,7 @@ const declineInvitation = async (req, res) => {
         }
 
         const updated = await prisma.contractProposal.update({
-            where: { proposalID },
+            where: { proposalID: proposalId },
             data: {
                 status: 'DECLINED',
                 declineReason: declineReason || null,

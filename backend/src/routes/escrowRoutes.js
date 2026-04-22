@@ -31,6 +31,20 @@ router.post(
 );
 
 router.get(
+    '/verify-payment',
+    verifyToken,
+    requireRoles(['CLIENT']),
+    escrowController.verifySafepayReturn
+);
+
+router.post(
+    '/simulate-deposit',
+    verifyToken,
+    requireRoles(['CLIENT']),
+    escrowController.simulateDeposit
+);
+
+router.get(
     '/history',
     verifyToken,
     requireRoles(['CLIENT', 'DEVELOPER']),

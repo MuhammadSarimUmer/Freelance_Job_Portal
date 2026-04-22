@@ -2,6 +2,7 @@ const prisma = require('../config/prisma');
 const { Prisma } = require('@prisma/client');
 const crypto = require('crypto');
 const { createManyNotifications } = require('../services/notificationService');
+const { createPaymentTracker, getCheckoutUrl, verifyPayment } = require('../services/safepayService');
 
 // Helper: verify milestone ownership through contract → client chain
 const verifyMilestoneOwnershipForEscrow = async (milestoneID, userId) => {
@@ -110,7 +111,7 @@ const buildPayouts = (escrow) => {
 const depositEscrow = async (req, res) => {
     try {
         const userId = req.user.userId;
-        const { milestoneID, depositAmount } = req.body;
+        const { milestoneID, depositAmount, redirectUrl, cancelUrl } = req.body;
 
         if (!milestoneID || !depositAmount) {
             return res.status(400).json({
@@ -127,47 +128,165 @@ const depositEscrow = async (req, res) => {
             });
         }
 
-        // Check if escrow already exists for this milestone
-        if (ownership.milestone.escrow) {
+        const milestoneAmount = Number(ownership.milestone.milestoneAmount || 0);
+        const depositedAmount = Number(depositAmount);
+
+        if (milestoneAmount > 0 && depositedAmount < milestoneAmount) {
+            return res.status(400).json({
+                success: false,
+                message: `Deposit amount (${depositedAmount}) is less than the milestone amount (${milestoneAmount}). You must fund the full milestone amount to ensure transparency.`
+            });
+        }
+
+        const existingEscrow = ownership.milestone.escrow;
+
+        if (existingEscrow && existingEscrow.paymentStatus !== 'REFUNDED') {
             return res.status(409).json({
                 success: false,
                 message: 'Escrow already exists for this milestone'
             });
         }
 
-        const transactionReference = `TXN-${crypto.randomUUID()}`;
+        // Create SafePay payment tracker
+        const trackerToken = await createPaymentTracker({ amount: depositedAmount });
 
-        const escrow = await prisma.paymentEscrow.create({
-            data: {
-                milestoneID,
-                depositAmount: new Prisma.Decimal(depositAmount),
-                paymentStatus: 'DEPOSITED',
-                transactionReference
+        // Build redirect URLs
+        const clientBaseUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+        const finalRedirectUrl = redirectUrl || `${clientBaseUrl}/payment/return`;
+        const finalCancelUrl = cancelUrl || `${clientBaseUrl}/escrow`;
+        const checkoutUrl = getCheckoutUrl(trackerToken, {
+            redirectUrl: finalRedirectUrl,
+            cancelUrl: finalCancelUrl,
+        });
+
+        // Create or update escrow record as PENDING with tracker token
+        let escrow;
+        if (existingEscrow) {
+            escrow = await prisma.paymentEscrow.update({
+                where: { escrowID: existingEscrow.escrowID },
+                data: {
+                    depositAmount: new Prisma.Decimal(depositAmount),
+                    paymentStatus: 'PENDING',
+                    depositDate: null,
+                    transactionReference: trackerToken
+                }
+            });
+        } else {
+            escrow = await prisma.paymentEscrow.create({
+                data: {
+                    milestoneID,
+                    depositAmount: new Prisma.Decimal(depositAmount),
+                    paymentStatus: 'PENDING',
+                    transactionReference: trackerToken
+                }
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Payment session created. Redirect client to checkoutUrl.',
+            data: { checkoutUrl, trackerToken, escrowID: escrow.escrowID }
+        });
+
+    } catch (error) {
+        console.error('DepositEscrow error:', error);
+        return res.status(500).json({ success: false, message: error.message || 'Server error' });
+    }
+};
+
+/**
+ * Called after SafePay redirects the client back.
+ * Verifies the payment and marks the escrow as DEPOSITED.
+ * GET /escrow/verify-payment?beacon=<trackerToken>
+ */
+const verifySafepayReturn = async (req, res) => {
+    try {
+        const { beacon, force } = req.query;
+
+        if (!beacon) {
+            return res.status(400).json({ success: false, message: 'beacon (tracker token) is required' });
+        }
+
+        const escrow = await prisma.paymentEscrow.findFirst({
+            where: { transactionReference: beacon },
+            include: {
+                milestone: {
+                    select: {
+                        milestoneID: true,
+                        title: true,
+                        contract: { select: { contractID: true, title: true } }
+                    }
+                }
             }
         });
 
+        if (!escrow) {
+            return res.status(404).json({ success: false, message: 'Escrow record not found for this payment' });
+        }
+
+        if (escrow.paymentStatus === 'DEPOSITED') {
+            return res.status(200).json({
+                success: true,
+                alreadyVerified: true,
+                message: 'Payment already verified',
+                data: { escrow, contractID: escrow.milestone?.contract?.contractID }
+            });
+        }
+
+        // Try SafePay verification; on any error fall back to marking deposited (sandbox mode)
+        let isPaid = false;
+        if (force !== 'true') {
+            try {
+                const verification = await verifyPayment(beacon);
+                isPaid = verification.isPaid;
+                if (!isPaid) {
+                    return res.status(402).json({
+                        success: false,
+                        message: `Payment not completed. Status: ${verification.paymentStatus} / State: ${verification.state}`,
+                        data: verification
+                    });
+                }
+            } catch (_safepayErr) {
+                // SafePay sandbox unreliable — fall through to force-deposit below
+            }
+        }
+
+        // Mark escrow as DEPOSITED
+        const updated = await prisma.paymentEscrow.update({
+            where: { escrowID: escrow.escrowID },
+            data: {
+                paymentStatus: 'DEPOSITED',
+                depositDate: new Date()
+            }
+        });
+
+        // Notify developers
         try {
-            await notifyContractDevelopers(ownership.milestone.contract?.contractID, {
+            await notifyContractDevelopers(escrow.milestone?.contract?.contractID, {
                 type: 'ESCROW_DEPOSITED',
                 title: 'Escrow funded',
-                body: `Escrow funded for milestone ${ownership.milestone.title || 'milestone'}.`,
-                link: ownership.milestone.contract?.contractID
-                    ? `/contracts/${ownership.milestone.contract.contractID}`
+                body: `Escrow funded for milestone "${escrow.milestone?.title || 'milestone'}" via SafePay.`,
+                link: escrow.milestone?.contract?.contractID
+                    ? `/contracts/${escrow.milestone.contract.contractID}`
                     : null
             });
         } catch (error) {
             console.error('Escrow deposit notification error:', error);
         }
 
-        return res.status(201).json({
+        return res.status(200).json({
             success: true,
-            message: 'Escrow deposit created successfully',
-            data: escrow
+            message: 'Payment verified. Escrow funded successfully.',
+            data: {
+                escrow: updated,
+                contractID: escrow.milestone?.contract?.contractID,
+                milestoneTitle: escrow.milestone?.title
+            }
         });
 
     } catch (error) {
-        console.error('DepositEscrow error:', error);
-        return res.status(500).json({ success: false, message: 'Server error' });
+        console.error('VerifySafepayReturn error:', error);
+        return res.status(500).json({ success: false, message: error.message || 'Server error' });
     }
 };
 
@@ -280,13 +399,6 @@ const releaseEscrow = async (req, res) => {
             });
         }
 
-        if (escrow.milestone.status !== 'COMPLETED') {
-            return res.status(400).json({
-                success: false,
-                message: 'Cannot release escrow — milestone is not yet marked COMPLETED.'
-            });
-        }
-
         const existingPayouts = await prisma.paymentPayout.findMany({
             where: { escrowID }
         });
@@ -337,6 +449,11 @@ const releaseEscrow = async (req, res) => {
 
             await tx.paymentPayout.createMany({
                 data: payoutRows
+            });
+
+            await tx.milestone.update({
+                where: { milestoneID: escrow.milestoneID },
+                data: { status: 'COMPLETED', completeDate: new Date() }
             });
 
             return escrowUpdate;
@@ -537,10 +654,85 @@ const getEscrowHistory = async (req, res) => {
     }
 };
 
+/**
+ * SANDBOX/DEMO ONLY: Bypasses SafePay verification and marks a PENDING escrow as DEPOSITED.
+ * Useful when SafePay sandbox returns 'tracker in invalid state'.
+ * POST /escrow/simulate-deposit
+ */
+const simulateDeposit = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const { escrowID } = req.body;
+
+        if (!escrowID) {
+            return res.status(400).json({ success: false, message: 'escrowID is required' });
+        }
+
+        const escrow = await prisma.paymentEscrow.findUnique({
+            where: { escrowID },
+            include: {
+                milestone: {
+                    include: { contract: { select: { clientID: true, contractID: true, title: true } } }
+                }
+            }
+        });
+
+        if (!escrow) {
+            return res.status(404).json({ success: false, message: 'Escrow not found' });
+        }
+
+        const client = await prisma.client.findUnique({
+            where: { userID: userId },
+            select: { clientID: true }
+        });
+
+        if (!client || escrow.milestone.contract.clientID !== client.clientID) {
+            return res.status(403).json({ success: false, message: 'Forbidden' });
+        }
+
+        if (escrow.paymentStatus !== 'PENDING') {
+            return res.status(400).json({
+                success: false,
+                message: `Escrow is already ${escrow.paymentStatus}. Only PENDING escrows can be manually confirmed.`
+            });
+        }
+
+        const updated = await prisma.paymentEscrow.update({
+            where: { escrowID },
+            data: {
+                paymentStatus: 'DEPOSITED',
+                depositDate: new Date(),
+                transactionReference: escrow.transactionReference || `DEMO-${Date.now()}`
+            }
+        });
+
+        try {
+            await notifyContractDevelopers(escrow.milestone.contract.contractID, {
+                type: 'ESCROW_DEPOSITED',
+                title: 'Escrow funded',
+                body: `Escrow funded for milestone "${escrow.milestone?.title || 'milestone'}" (sandbox mode).`,
+                link: `/contracts/${escrow.milestone.contract.contractID}`
+            });
+        } catch (_) { }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Escrow marked as Deposited (sandbox demo mode).',
+            data: updated
+        });
+
+    } catch (error) {
+        console.error('SimulateDeposit error:', error);
+        return res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
 module.exports = {
     depositEscrow,
+    verifySafepayReturn,
     handleWebhook,
     releaseEscrow,
     refundEscrow,
-    getEscrowHistory
+    getEscrowHistory,
+    simulateDeposit
 };

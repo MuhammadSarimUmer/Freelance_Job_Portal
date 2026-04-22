@@ -23,12 +23,12 @@ function ClientDashboard() {
   const [confirmDeleteContractId, setConfirmDeleteContractId] = useState(null);
   const [stats, setStats] = useState([
     { label: "Active Contracts", value: "0", icon: "assignment" },
+    { label: "Completed Projects", value: "0", icon: "check_circle" },
+    { label: "Money Paid Out", value: "$0", icon: "payments" },
+    { label: "In Escrow Now", value: "$0", icon: "lock" },
     { label: "Pending Proposals", value: "0", icon: "inbox" },
-    { label: "Total Budget", value: "$0", icon: "payments" },
     { label: "Milestones Pending", value: "0", icon: "flag" },
-    { label: "Bugs Open", value: "0", icon: "bug_report" },
-    { label: "Escrow Held", value: "$0", icon: "lock" },
-    { label: "Escrow Released", value: "$0", icon: "lock_open" },
+    { label: "Open Bugs", value: "0", icon: "bug_report" },
   ]);
 
   const statusLabelMap = {
@@ -43,33 +43,40 @@ function ClientDashboard() {
 
   const fetchContracts = async () => {
     try {
-      const [{ data }, { data: statsRes }] = await Promise.all([
-        contractService.getMyContracts(),
-        statsService.getDashboardStats(),
-      ]);
-      const contracts = data?.data || [];
-      const s = statsRes?.data;
+      const { data } = await contractService.getMyContracts();
+      const fetchedContracts = data?.data || [];
 
-      const pendingProposalsCount = contracts.reduce((sum, contract) => {
+      const pendingProposalsCount = fetchedContracts.reduce((sum, contract) => {
         const count = (contract.proposals || []).filter(
           (proposal) => proposal.status === "PENDING" && proposal.source === "DEVELOPER_PROPOSAL"
         ).length;
         return sum + count;
       }, 0);
 
-      setStats([
-        { label: "Active Contracts", value: String(s?.contracts?.byStatus?.IN_PROGRESS ?? 0), icon: "assignment" },
-        { label: "Pending Proposals", value: String(pendingProposalsCount), icon: "inbox" },
-        { label: "Total Budget", value: `$${Number(s?.totalAmount ?? 0).toLocaleString()}`, icon: "payments" },
-        { label: "Milestones Pending", value: String(s?.milestones?.byStatus?.PENDING ?? 0), icon: "flag" },
-        { label: "Bugs Open", value: String(s?.bugs?.byStatus?.REPORTED ?? 0), icon: "bug_report" },
-        { label: "Escrow Held", value: `$${Number(s?.escrow?.totalDeposited ?? 0).toLocaleString()}`, icon: "lock" },
-        { label: "Escrow Released", value: `$${Number(s?.escrow?.totalReleased ?? 0).toLocaleString()}`, icon: "lock_open" },
-      ]);
+      setContracts(fetchedContracts);
 
-      setContracts(contracts);
+      statsService.getDashboardStats().then(({ data: statsRes }) => {
+        const s = statsRes?.data;
+        const activeCount = (s?.contracts?.byStatus?.IN_PROGRESS ?? 0) + (s?.contracts?.byStatus?.SIGNED ?? 0);
+        const completedCount = s?.contracts?.byStatus?.COMPLETED ?? 0;
+        setStats([
+          { label: "Active Contracts", value: String(activeCount), icon: "assignment" },
+          { label: "Completed Projects", value: String(completedCount), icon: "check_circle" },
+          { label: "Money Paid Out", value: `$${Number(s?.escrow?.totalReleased ?? 0).toLocaleString()}`, icon: "payments" },
+          { label: "In Escrow Now", value: `$${Number(s?.escrow?.totalDeposited ?? 0).toLocaleString()}`, icon: "lock" },
+          { label: "Pending Proposals", value: String(pendingProposalsCount), icon: "inbox" },
+          { label: "Milestones Pending", value: String(s?.milestones?.byStatus?.PENDING ?? 0), icon: "flag" },
+          { label: "Open Bugs", value: String(s?.bugs?.byStatus?.REPORTED ?? 0), icon: "bug_report" },
+        ]);
+      }).catch((err) => {
+        console.error("Stats fetch failed:", err);
+        setStats((prev) => prev.map((stat, i) =>
+          i === 4 ? { ...stat, value: String(pendingProposalsCount) } : stat
+        ));
+      });
     } catch (err) {
-      console.error("ClientDashboard fetch failed:", err);
+      console.error("ClientDashboard contracts fetch failed:", err);
+      addToast("Failed to load contracts.", "error");
     }
   };
 
@@ -93,13 +100,33 @@ function ClientDashboard() {
     if (match) setSelectedContract(match);
   }, [search, contracts, selectedContract]);
 
+  const closeHiringPipeline = () => {
+    setSelectedContract(null);
+    const params = new URLSearchParams(search);
+    if (!params.has("contract")) return;
+    params.delete("contract");
+    const nextSearch = params.toString();
+    navigate(
+      {
+        pathname: "/client/dashboard",
+        search: nextSearch ? `?${nextSearch}` : "",
+      },
+      { replace: true }
+    );
+  };
+
   const handleDeleteContract = async () => {
     if (!confirmDeleteContractId) return;
     try {
       await contractService.deleteContract(confirmDeleteContractId);
       await fetchContracts();
     } catch (err) {
-      addToast(err?.response?.data?.message || "Failed to delete contract.", "error");
+      const msg = err?.response?.data?.message;
+      if (msg?.includes("active relations") || msg?.includes("escrow")) {
+        addToast("Cannot delete: contract has active milestones, escrow, or team members. Cancel the contract first, or contact support.", "error");
+      } else {
+        addToast(msg || "Failed to delete contract.", "error");
+      }
     } finally {
       setConfirmDeleteContractId(null);
     }
@@ -117,7 +144,7 @@ function ClientDashboard() {
       {selectedContract ? (
         <ManageApplicationsModal
           contract={selectedContract}
-          onClose={() => setSelectedContract(null)}
+          onClose={closeHiringPipeline}
         />
       ) : null}
       {editingContract ? (

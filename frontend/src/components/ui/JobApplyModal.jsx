@@ -165,6 +165,56 @@ function JobApplyModal({ job, onClose, onSubmitted }) {
           </p>
         </div>
 
+        {/* Milestones */}
+        {(job.milestones || []).length > 0 ? (
+          <div style={{ marginBottom: "2rem", position: "relative", zIndex: 1 }}>
+            <h3 style={{ fontFamily: "var(--font-headline)", fontSize: "0.9rem", color: "var(--color-secondary)", marginBottom: "0.75rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              Payment Milestones
+            </h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {job.milestones.map((m, idx) => (
+                <div
+                  key={m.milestoneID || idx}
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.75rem 1rem", background: "var(--color-surface)", borderRadius: "6px", borderLeft: "3px solid var(--color-primary)", gap: "1rem" }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontFamily: "var(--font-headline)", fontWeight: 700, fontSize: "0.85rem", color: "var(--color-on-surface)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {m.title || `Milestone ${idx + 1}`}
+                    </p>
+                    {m.dueDate ? (
+                      <p style={{ margin: "2px 0 0", fontSize: "0.72rem", color: "var(--color-outline)", fontFamily: "var(--font-body)" }}>
+                        Due {new Date(m.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </p>
+                    ) : null}
+                  </div>
+                  <span style={{ fontFamily: "var(--font-headline)", fontWeight: 700, fontSize: "0.9rem", color: "var(--color-on-surface)", flexShrink: 0 }}>
+                    ${Number(m.milestoneAmount || 0).toLocaleString()}
+                  </span>
+                </div>
+              ))}
+              <p style={{ margin: "0.4rem 0 0", fontSize: "0.72rem", color: "var(--color-outline)", fontFamily: "var(--font-body)", textAlign: "right" }}>
+                Total: ${Number(job.totalAmount || 0).toLocaleString()} across {job.milestones.length} milestone{job.milestones.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Tech Stack */}
+        {(job.technologies || []).length > 0 ? (
+          <div style={{ marginBottom: "2rem", position: "relative", zIndex: 1 }}>
+            <h3 style={{ fontFamily: "var(--font-headline)", fontSize: "0.9rem", color: "var(--color-secondary)", marginBottom: "0.75rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              Required Tech
+            </h3>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+              {job.technologies.map((t, i) => (
+                <span key={t.techID || i} style={{ fontSize: "0.72rem", fontWeight: 600, textTransform: "uppercase", padding: "3px 9px", color: "var(--color-on-surface-variant)", fontFamily: "var(--font-label)", background: "var(--color-surface)", borderRadius: "4px", letterSpacing: "0.06em" }}>
+                  {t.tech?.techName || "Tech"} · {t.requiredLevel}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         {/* Hiring Status */}
         <div style={{ background: "rgba(161,250,255,0.05)", border: "1px solid rgba(161,250,255,0.15)", borderRadius: "6px", padding: "1.25rem", marginBottom: "2rem", position: "relative", zIndex: 1 }}>
           <p style={{ fontFamily: "var(--font-label)", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.15em", color: "var(--color-primary)", marginBottom: "0.5rem", fontWeight: 700 }}>

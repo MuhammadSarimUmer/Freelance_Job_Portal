@@ -25,6 +25,11 @@ const updateDeveloperValidator = [
     body('experienceYears')
         .optional()
         .isInt({ min: 0, max: 50 }).withMessage('Experience years must be between 0 and 50'),
+    body('bio')
+        .optional()
+        .trim()
+        .isLength({ max: 1000 }).withMessage('Bio must be 1000 characters or less')
+        .escape(),
     body('removeProfileImage')
         .optional()
         .isBoolean().withMessage('removeProfileImage must be a boolean')

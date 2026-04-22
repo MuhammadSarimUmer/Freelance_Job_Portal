@@ -7,7 +7,7 @@ const getDevelopers = async (req, res) => {
     try {
         const { status, minExperience } = req.query;
         const page = Math.max(parseInt(req.query.page || '1', 10), 1);
-        const limit = Math.min(Math.max(parseInt(req.query.limit || '20', 10), 1), 100);
+        const limit = Math.min(Math.max(parseInt(req.query.limit || '20', 10), 1), 300);
         const skip = (page - 1) * limit;
         const whereClause = {};
 
@@ -26,11 +26,17 @@ const getDevelopers = async (req, res) => {
             whereClause.experienceYears = { gte: parsed };
         }
 
+        const { sortBy } = req.query;
+
         const [developers, total] = await Promise.all([
             prisma.developer.findMany({
                 where: whereClause,
                 include: {
-                    user: { select: { fullName: true, email: true, profileImageUrl: true } },
+                    user: {
+                        include: {
+                            reviewsReceived: { select: { rating: true } }
+                        }
+                    },
                     knownTechs: { include: { tech: true } }
                 },
                 skip,
@@ -39,9 +45,21 @@ const getDevelopers = async (req, res) => {
             prisma.developer.count({ where: whereClause })
         ]);
 
+        const developersWithRating = developers.map((dev) => {
+            const reviews = dev.user?.reviewsReceived || [];
+            const avgRating = reviews.length > 0
+                ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+                : null;
+            return { ...dev, averageRating: avgRating, reviewCount: reviews.length };
+        });
+
+        if (sortBy === 'rating') {
+            developersWithRating.sort((a, b) => (b.averageRating ?? -1) - (a.averageRating ?? -1));
+        }
+
         res.status(200).json({
             success: true,
-            data: developers,
+            data: developersWithRating,
             meta: {
                 page,
                 limit,
@@ -62,7 +80,14 @@ const getDeveloperById = async (req, res) => {
         const developer = await prisma.developer.findUnique({
             where: { developerID: id },
             include: {
-                user: { select: { fullName: true, email: true, registrationDate: true, profileImageUrl: true } },
+                user: {
+                    include: {
+                        reviewsReceived: {
+                            select: { rating: true },
+                            take: 100
+                        }
+                    }
+                },
                 knownTechs: { include: { tech: true } }
             }
         });
@@ -71,7 +96,14 @@ const getDeveloperById = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Developer not found' });
         }
 
-        res.status(200).json({ success: true, data: developer });
+        const reviews = developer.user?.reviewsReceived || [];
+        const averageRating = reviews.length > 0
+            ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+            : null;
+
+        const developerWithRating = { ...developer, averageRating, reviewCount: reviews.length };
+
+        res.status(200).json({ success: true, data: developerWithRating });
     } catch (error) {
         console.error('GetDeveloperById error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
@@ -80,7 +112,7 @@ const getDeveloperById = async (req, res) => {
 
 const updateDeveloperMe = async (req, res) => {
     try {
-        const { fullName, phoneNumber, hourlyRate, portfolioURL, availabilityStatus, experienceYears, removeProfileImage, cvUrl, removeCv, removePortfolio } = req.body;
+        const { fullName, phoneNumber, hourlyRate, portfolioURL, availabilityStatus, experienceYears, removeProfileImage, cvUrl, removeCv, removePortfolio, bio } = req.body;
 
         const userData = {};
         if (fullName !== undefined) userData.fullName = fullName;
@@ -122,6 +154,10 @@ const updateDeveloperMe = async (req, res) => {
                 return res.status(400).json({ success: false, message: 'Invalid experience years' });
             }
             developerData.experienceYears = parsedYears;
+        }
+        if (bio !== undefined) {
+            const trimmed = String(bio).trim();
+            developerData.bio = trimmed === '' ? null : trimmed;
         }
 
         const hasUserUpdates = Object.keys(userData).length > 0;
@@ -188,7 +224,33 @@ const getClientById = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Client not found' });
         }
 
-        res.status(200).json({ success: true, data: client });
+        const [contractsByStatus, releasedEscrow] = await Promise.all([
+            prisma.projectContract.groupBy({
+                by: ['status'],
+                where: { clientID: id },
+                _count: { status: true }
+            }),
+            prisma.paymentEscrow.aggregate({
+                where: {
+                    paymentStatus: 'RELEASED',
+                    milestone: { contract: { clientID: id } }
+                },
+                _sum: { depositAmount: true }
+            })
+        ]);
+
+        const statusMap = {};
+        contractsByStatus.forEach((g) => { statusMap[g.status] = g._count.status; });
+
+        const enriched = {
+            ...client,
+            memberSince: client.user?.registrationDate,
+            activeContracts: (statusMap.IN_PROGRESS || 0) + (statusMap.SIGNED || 0),
+            completedContracts: statusMap.COMPLETED || 0,
+            totalSpent: Number(releasedEscrow._sum.depositAmount || 0)
+        };
+
+        res.status(200).json({ success: true, data: enriched });
     } catch (error) {
         console.error('GetClientById error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
@@ -197,7 +259,7 @@ const getClientById = async (req, res) => {
 
 const updateClientMe = async (req, res) => {
     try {
-        const { fullName, phoneNumber, companyName, billingAddress, country, removeProfileImage } = req.body;
+        const { fullName, phoneNumber, companyName, billingAddress, country, bio, removeProfileImage } = req.body;
 
         const userData = {};
         if (fullName !== undefined) userData.fullName = fullName;
@@ -217,6 +279,10 @@ const updateClientMe = async (req, res) => {
         if (companyName !== undefined) clientData.companyName = companyName;
         if (billingAddress !== undefined) clientData.billingAddress = billingAddress;
         if (country !== undefined) clientData.country = country;
+        if (bio !== undefined) {
+            const trimmed = String(bio).trim();
+            clientData.bio = trimmed === '' ? null : trimmed;
+        }
 
         const hasUserUpdates = Object.keys(userData).length > 0;
         const hasClientUpdates = Object.keys(clientData).length > 0;
