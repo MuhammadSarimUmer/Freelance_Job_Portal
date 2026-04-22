@@ -1,47 +1,31 @@
-const nodemailer = require('nodemailer');
-require('dotenv').config();
+const { Resend } = require('resend');
 
 const appName = process.env.APP_NAME || 'Freelance Job Portal';
 const fromName = process.env.EMAIL_FROM_NAME || appName;
+const FROM_ADDRESS = `${fromName} <onboarding@resend.dev>`;
 
-const createTransporter = () => nodemailer.createTransport({
-	service: 'gmail',
-	auth: {
-		type: 'OAuth2',
-		user: process.env.EMAIL_USER,
-		clientId: process.env.CLIENT_ID,
-		clientSecret: process.env.CLIENT_SECRET,
-		refreshToken: process.env.REFRESH_TOKEN
-	}
-});
-
-let transporter = createTransporter();
-
-if (transporter.verify && process.env.NODE_ENV !== 'test' && process.env.EMAIL_USER) {
-	transporter.verify((error) => {
-		if (error) {
-			console.error('Email Server Error:', error);
-		} else {
-			console.log('Email service ready');
-		}
-	});
-}
-
-const setTransporter = (nextTransporter) => {
-	transporter = nextTransporter;
-};
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 const sendEmail = async (to, subject, html) => {
-	if (!transporter || typeof transporter.sendMail !== 'function') {
-		throw new Error('Email transporter is not configured');
+	if (!process.env.RESEND_API_KEY) {
+		throw new Error('RESEND_API_KEY is not configured');
 	}
 
-	return transporter.sendMail({
-		from: `"${fromName}" <${process.env.EMAIL_USER}>`,
+	const resend = getResend();
+	const { data, error } = await resend.emails.send({
+		from: FROM_ADDRESS,
 		to,
 		subject,
 		html
 	});
+
+	if (error) {
+		console.error(`[Email] FAILED → to: "${to}" | subject: "${subject}" |`, error);
+		throw new Error(error.message || 'Resend send error');
+	}
+
+	console.log(`[Email] Sent → to: "${to}" | subject: "${subject}" | id: ${data?.id}`);
+	return data;
 };
 
 const buildEmailLayout = ({ title, preheader, accentColor, bodyHtml, ctaLabel, ctaUrl, footerNote }) => {
@@ -184,6 +168,5 @@ module.exports = {
 	sendProposalSubmittedEmail,
 	sendInvitationEmail,
 	sendPasswordResetOtpEmail,
-	buildEmailLayout,
-	setTransporter
+	buildEmailLayout
 };
