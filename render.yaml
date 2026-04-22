@@ -16,19 +16,27 @@ services:
         value: 7d
       - key: CLIENT_URL
         sync: false          # set after Vercel deploy → your-app.vercel.app
+      - key: API_BASE_URL
+        sync: false          # e.g. https://codex-backend.onrender.com
+      - key: APP_NAME
+        value: Freelance Job Portal
+      - key: EMAIL_PROVIDER
+        value: brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false          # optional fallback if EMAIL_PROVIDER=resend
+      - key: EMAIL_FROM
+        sync: false          # e.g. Freelance Job Portal <noreply@yourdomain.com>
+      - key: EMAIL_FROM_NAME
+        value: Freelance Job Portal
+      - key: EMAIL_VERIFY_TTL_MINUTES
+        value: 60
+      - key: PASSWORD_RESET_OTP_TTL_MINUTES
+        value: 10
       - key: SAFEPAY_V1_SECRET
         sync: false
       - key: SAFEPAY_V1_PUBLIC
         sync: false
       - key: SAFEPAY_ENV
         value: sandbox
-      - key: EMAIL_HOST
-        sync: false
-      - key: EMAIL_PORT
-        sync: false
-      - key: EMAIL_USER
-        sync: false
-      - key: EMAIL_PASS
-        sync: false
-      - key: EMAIL_FROM
-        sync: false
