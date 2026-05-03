@@ -14,6 +14,7 @@ function BugReports() {
   const { addToast } = useToast();
 
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [contracts, setContracts] = useState([]);
   const [bugReportsData, setBugReportsData] = useState([]);
   const [updatingBugId, setUpdatingBugId] = useState(null);
@@ -145,30 +146,40 @@ function BugReports() {
     }
   };
 
-  const fetchData = async () => {
+  const loadBugReports = async ({ showLoader = true } = {}) => {
+    if (showLoader) setIsLoading(true);
     try {
-      setIsLoading(true);
       const res = await contractService.getMyContracts();
       const cs = res.data?.data || [];
       setContracts(cs);
       await fetchBugReports(cs);
 
-      if (!newBug.contractId && cs.length > 0) {
-        setNewBug((prev) => ({ ...prev, contractId: cs[0].contractID }));
-      }
+      setNewBug((prev) => {
+        if (prev.contractId || cs.length === 0) return prev;
+        return { ...prev, contractId: cs[0].contractID };
+      });
     } catch (err) {
       console.error("Failed to load bug reports:", err);
       addToast(err?.response?.data?.message || "Failed to load bug reports.", "error");
       setBugReportsData([]);
       setContracts([]);
     } finally {
-      setIsLoading(false);
+      if (showLoader) setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    loadBugReports();
+  }, [addToast]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadBugReports({ showLoader: false });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleUpdateStatus = async (bugId, status) => {
     if (!bugId) return;
@@ -320,17 +331,8 @@ function BugReports() {
             </p>
           </div>
 
-          {/* Report New Bug Button */}
-          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={fetchData}
-              disabled={isLoading}
-              style={{ padding: "0.875rem 1.25rem", borderRadius: "4px", border: "1px solid var(--color-outline-variant)", background: "transparent", color: "var(--color-on-surface)", cursor: isLoading ? "not-allowed" : "pointer", fontFamily: "var(--font-headline)", fontWeight: 700, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isLoading ? 0.6 : 1, display: "flex", alignItems: "center", gap: "0.35rem" }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>refresh</span>
-              {isLoading ? "Loading..." : "Refresh"}
-            </button>
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
+            {/* Report New Bug Button */}
             <button
               onClick={() => setShowForm(!showForm)}
               className={showForm ? "" : "signature-cta"}
@@ -357,6 +359,27 @@ function BugReports() {
                 {showForm ? "close" : "add"}
               </span>
               {showForm ? "Cancel" : "Report Bug"}
+            </button>
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              style={{
+                padding: "0.6rem 1.4rem",
+                background: "transparent",
+                color: "var(--color-on-surface)",
+                border: "1px solid var(--color-outline-variant)",
+                cursor: isRefreshing ? "not-allowed" : "pointer",
+                fontFamily: "var(--font-headline)",
+                fontWeight: 700,
+                fontSize: "0.75rem",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                borderRadius: "999px",
+                opacity: isRefreshing ? 0.6 : 1,
+              }}
+            >
+              {isRefreshing ? "Refreshing..." : "Refresh"}
             </button>
           </div>
         </header>
@@ -548,10 +571,11 @@ function BugReports() {
                           newBug.severity === level
                             ? bugSeverityColors[level].bg
                             : "var(--color-surface-container)",
-                        border: `1px solid ${newBug.severity === level
-                          ? bugSeverityColors[level].color
-                          : "var(--color-outline-variant-strong)"
-                          }`,
+                        border: `1px solid ${
+                          newBug.severity === level
+                            ? bugSeverityColors[level].color
+                            : "var(--color-outline-variant-strong)"
+                        }`,
                         color:
                           newBug.severity === level
                             ? bugSeverityColors[level].color
@@ -808,10 +832,11 @@ function BugReports() {
                           editBugForm.severity === level
                             ? bugSeverityColors[level].bg
                             : "var(--color-surface-container)",
-                        border: `1px solid ${editBugForm.severity === level
-                          ? bugSeverityColors[level].color
-                          : "var(--color-outline-variant-strong)"
-                          }`,
+                        border: `1px solid ${
+                          editBugForm.severity === level
+                            ? bugSeverityColors[level].color
+                            : "var(--color-outline-variant-strong)"
+                        }`,
                         color:
                           editBugForm.severity === level
                             ? bugSeverityColors[level].color
@@ -906,15 +931,15 @@ function BugReports() {
                     borderBottom: "1px solid var(--color-outline-variant-strong)",
                   }}
                 >
-                  {[
-                    "Bug ID",
-                    "Contract",
-                    "Title",
-                    "Severity",
-                    "Status",
-                    "Reported",
-                    "Actions",
-                  ].map((col) => (
+                    {[
+                      "Bug ID",
+                      "Contract",
+                      "Title",
+                      "Severity",
+                      "Status",
+                      "Reported",
+                      "Actions",
+                    ].map((col) => (
                     <th
                       key={col}
                       style={{

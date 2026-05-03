@@ -17,14 +17,23 @@ function Navbar() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isRefreshingNotifications, setIsRefreshingNotifications] = useState(false);
   const notificationRef = useRef(null);
 
-  const fetchNotifications = async () => {
+  const loadNotifications = async ({ markRead = false } = {}) => {
     try {
       const res = await notificationService.getMyNotifications();
       const payload = res.data?.data || {};
-      setNotifications(payload.notifications || []);
-      setUnreadCount(payload.unreadCount || 0);
+      const list = payload.notifications || [];
+      const nextUnread = payload.unreadCount || 0;
+      setNotifications(list);
+      setUnreadCount(nextUnread);
+
+      if (markRead && nextUnread > 0) {
+        await notificationService.markAllRead();
+        setUnreadCount(0);
+        setNotifications(list.map((item) => ({ ...item, isRead: true })));
+      }
     } catch (err) {
       console.error("Failed to load notifications", err);
     }
@@ -36,7 +45,7 @@ function Navbar() {
       setUnreadCount(0);
       return;
     }
-    fetchNotifications();
+    loadNotifications();
   }, [user?.userID]);
 
   useEffect(() => {
@@ -65,20 +74,20 @@ function Navbar() {
 
     if (nextOpen) {
       try {
-        const res = await notificationService.getMyNotifications();
-        const payload = res.data?.data || {};
-        const list = payload.notifications || [];
-        setNotifications(list);
-        setUnreadCount(payload.unreadCount || 0);
-
-        if ((payload.unreadCount || 0) > 0) {
-          await notificationService.markAllRead();
-          setUnreadCount(0);
-          setNotifications(list.map((item) => ({ ...item, isRead: true })));
-        }
+        await loadNotifications({ markRead: true });
       } catch (err) {
         console.error("Failed to open notifications", err);
       }
+    }
+  };
+
+  const handleRefreshNotifications = async () => {
+    if (!user) return;
+    setIsRefreshingNotifications(true);
+    try {
+      await loadNotifications({ markRead: true });
+    } finally {
+      setIsRefreshingNotifications(false);
     }
   };
 
@@ -220,15 +229,51 @@ function Navbar() {
                     zIndex: 10,
                   }}
                 >
-                  <p
+                  <div
                     style={{
-                      fontFamily: "var(--font-headline)",
-                      fontWeight: 700,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
                       marginBottom: "0.75rem",
+                      gap: "0.75rem",
                     }}
                   >
-                    Notifications
-                  </p>
+                    <p
+                      style={{
+                        fontFamily: "var(--font-headline)",
+                        fontWeight: 700,
+                        margin: 0,
+                      }}
+                    >
+                      Notifications
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleRefreshNotifications}
+                      disabled={isRefreshingNotifications}
+                      style={{
+                        background: "transparent",
+                        border: "1px solid var(--color-outline-variant)",
+                        color: "var(--color-on-surface)",
+                        padding: "0.3rem 0.6rem",
+                        borderRadius: "999px",
+                        cursor: isRefreshingNotifications ? "not-allowed" : "pointer",
+                        fontFamily: "var(--font-headline)",
+                        fontSize: "0.7rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.35rem",
+                        opacity: isRefreshingNotifications ? 0.6 : 1,
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: "0.95rem" }}>
+                        refresh
+                      </span>
+                      {isRefreshingNotifications ? "Refreshing..." : "Refresh"}
+                    </button>
+                  </div>
                   {notifications.length === 0 ? (
                     <p style={{ color: "var(--color-on-surface-variant)" }}>
                       You are all caught up.

@@ -8,6 +8,7 @@ function ContractChat({ contractID, currentUserId }) {
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const messagesEndRef = useRef(null);
   const lastMessageAtRef = useRef(null);
 
@@ -54,9 +55,8 @@ function ContractChat({ contractID, currentUserId }) {
     fetchMessages({ showLoader: true });
     const interval = setInterval(() => {
       if (document.visibilityState !== "visible") return;
-      if (!document.hasFocus()) return;
       fetchMessages({ since: lastMessageAtRef.current });
-    }, 12000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [contractID]);
 
@@ -82,20 +82,38 @@ function ContractChat({ contractID, currentUserId }) {
     }
   };
 
+  const handleRefresh = async () => {
+    if (!contractID) return;
+    setIsRefreshing(true);
+    try {
+      await fetchMessages({ showLoader: false });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontFamily: "var(--font-label)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--color-outline)" }}>
-          Contract Chat · auto-updates every 5s
-        </span>
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button
           type="button"
-          onClick={() => fetchMessages({ showLoader: true })}
-          disabled={isLoading}
-          style={{ padding: "0.35rem 0.75rem", borderRadius: "4px", border: "1px solid var(--color-outline-variant)", background: "transparent", color: "var(--color-on-surface)", cursor: isLoading ? "not-allowed" : "pointer", fontFamily: "var(--font-headline)", fontWeight: 700, fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isLoading ? 0.6 : 1, display: "flex", alignItems: "center", gap: "0.3rem" }}
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          style={{
+            background: "transparent",
+            border: "1px solid var(--color-outline-variant)",
+            color: "var(--color-on-surface)",
+            padding: "0.4rem 1.1rem",
+            borderRadius: "999px",
+            cursor: isRefreshing ? "not-allowed" : "pointer",
+            fontFamily: "var(--font-headline)",
+            fontSize: "0.7rem",
+            textTransform: "uppercase",
+            letterSpacing: "0.1em",
+            opacity: isRefreshing ? 0.6 : 1,
+          }}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: "0.85rem" }}>refresh</span>
-          Refresh
+          {isRefreshing ? "Refreshing..." : "Refresh"}
         </button>
       </div>
       <div

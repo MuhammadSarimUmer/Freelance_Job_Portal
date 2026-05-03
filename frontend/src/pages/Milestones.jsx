@@ -39,6 +39,7 @@ function Milestones() {
   });
   const [isLoadingEdit, setIsLoadingEdit] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const selectedContract = useMemo(
     () => contracts.find((c) => c.contractID === newMilestone.contractID),
@@ -161,6 +162,15 @@ function Milestones() {
   useEffect(() => {
     fetchMilestones();
   }, [addToast]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchMilestones();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleCreateMilestone = async () => {
     if (!newMilestone.contractID || !newMilestone.title || !newMilestone.dueDate || !newMilestone.milestoneAmount) {
@@ -422,31 +432,54 @@ function Milestones() {
               Track deliverables and escrow payments across all contracts
             </p>
           </div>
-          <button
-            onClick={() => setShowForm((prev) => !prev)}
-            className="signature-cta"
-            style={{
-              padding: "0.875rem 2rem",
-              color: "var(--color-on-primary-container)",
-              fontFamily: "var(--font-headline)",
-              fontWeight: 700,
-              border: "none",
-              cursor: "pointer",
-              fontSize: "0.875rem",
-              borderRadius: "4px",
-              transition: "transform 0.3s ease, filter 0.3s ease"
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.filter = "brightness(1.1)";
-              e.target.style.transform = "translateY(-2px)";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.filter = "brightness(1)";
-              e.target.style.transform = "translateY(0)";
-            }}
-          >
-            {showForm ? "Cancel" : "Add Milestone"}
-          </button>
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
+            <button
+              onClick={() => setShowForm((prev) => !prev)}
+              className="signature-cta"
+              style={{
+                padding: "0.875rem 2rem",
+                color: "var(--color-on-primary-container)",
+                fontFamily: "var(--font-headline)",
+                fontWeight: 700,
+                border: "none",
+                cursor: "pointer",
+                fontSize: "0.875rem",
+                borderRadius: "4px",
+                transition: "transform 0.3s ease, filter 0.3s ease"
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.filter = "brightness(1.1)";
+                e.target.style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.filter = "brightness(1)";
+                e.target.style.transform = "translateY(0)";
+              }}
+            >
+              {showForm ? "Cancel" : "Add Milestone"}
+            </button>
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              style={{
+                padding: "0.6rem 1.4rem",
+                background: "transparent",
+                color: "var(--color-on-surface)",
+                border: "1px solid var(--color-outline-variant)",
+                cursor: isRefreshing ? "not-allowed" : "pointer",
+                fontFamily: "var(--font-headline)",
+                fontWeight: 700,
+                fontSize: "0.75rem",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                borderRadius: "999px",
+                opacity: isRefreshing ? 0.6 : 1,
+              }}
+            >
+              {isRefreshing ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
         </header>
 
         {showForm ? (
