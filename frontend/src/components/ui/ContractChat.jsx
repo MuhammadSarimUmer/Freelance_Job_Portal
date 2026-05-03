@@ -8,7 +8,6 @@ function ContractChat({ contractID, currentUserId }) {
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const messagesEndRef = useRef(null);
   const lastMessageAtRef = useRef(null);
 
@@ -82,40 +81,8 @@ function ContractChat({ contractID, currentUserId }) {
     }
   };
 
-  const handleRefresh = async () => {
-    if (!contractID) return;
-    setIsRefreshing(true);
-    try {
-      await fetchMessages({ showLoader: false });
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button
-          type="button"
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          style={{
-            background: "transparent",
-            border: "1px solid var(--color-outline-variant)",
-            color: "var(--color-on-surface)",
-            padding: "0.4rem 1.1rem",
-            borderRadius: "999px",
-            cursor: isRefreshing ? "not-allowed" : "pointer",
-            fontFamily: "var(--font-headline)",
-            fontSize: "0.7rem",
-            textTransform: "uppercase",
-            letterSpacing: "0.1em",
-            opacity: isRefreshing ? 0.6 : 1,
-          }}
-        >
-          {isRefreshing ? "Refreshing..." : "Refresh"}
-        </button>
-      </div>
       <div
         style={{
           background: "var(--color-surface-container)",

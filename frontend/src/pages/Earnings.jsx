@@ -18,7 +18,6 @@ function Earnings() {
 
   const [earningsTransactions, setEarningsTransactions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const formatDate = (value) => {
     if (!value) return null;
@@ -35,57 +34,47 @@ function Earnings() {
         return "Held";
       case "PENDING":
         return "Pending";
-      const fetchEscrows = async () => {
-        try {
-          setIsLoading(true);
-          const res = await escrowService.getEscrowHistory();
-          const history = res.data?.data || res.data || [];
+      case "REFUNDED":
+      default:
+        return "Pending";
+    }
+  };
 
-          const txns = history.map((e) => {
-            const paymentStatus = mapPaymentStatus(e.paymentStatus);
-            const payout = Array.isArray(e.payouts) ? e.payouts[0] : null;
-            const payoutAmount = payout?.amount ?? e.depositAmount;
-            const amountNum = Number(payoutAmount ?? 0);
-            const depositAmount = `$${Number.isFinite(amountNum) ? amountNum.toFixed(2).replace(/\.00$/, "") : "0"}`;
-            const shareNum = Number(payout?.sharePercent ?? 100);
-            const paymentShare = `${Number.isFinite(shareNum) ? shareNum : 100}%`;
+  useEffect(() => {
+    const fetchEscrows = async () => {
+      try {
+        setIsLoading(true);
+        const res = await escrowService.getEscrowHistory();
+        const history = res.data?.data || res.data || [];
 
-            return {
-              escrowId: e.escrowID,
-              milestoneTitle: e.milestone?.title || "Milestone",
-              milestoneId: e.milestone?.milestoneID || null,
-              contractId: e.milestone?.contract?.contractID || null,
-              depositAmount,
-              paymentShare,
-              paymentStatus,
-              transactionRef: e.transactionReference || null,
-              depositDate: formatDate(e.depositDate),
-              releaseDate: formatDate(e.releaseDate),
-            };
-          });
+        const txns = history.map((e) => {
+          const paymentStatus = mapPaymentStatus(e.paymentStatus);
+          const payout = Array.isArray(e.payouts) ? e.payouts[0] : null;
+          const payoutAmount = payout?.amount ?? e.depositAmount;
+          const amountNum = Number(payoutAmount ?? 0);
+          const depositAmount = `$${Number.isFinite(amountNum) ? amountNum.toFixed(2).replace(/\\.00$/, "") : "0"}`;
+          const shareNum = Number(payout?.sharePercent ?? 100);
+          const paymentShare = `${Number.isFinite(shareNum) ? shareNum : 100}%`;
 
-          setEarningsTransactions(txns);
-        } catch (err) {
-          console.error("Failed to load earnings:", err);
-          addToast(err?.response?.data?.message || "Failed to load earnings.", "error");
-          setEarningsTransactions([]);
-        } finally {
-          setIsLoading(false);
-        }
-      };
+          return {
+            escrowId: e.escrowID,
+            milestoneTitle: e.milestone?.title || "Milestone",
+            milestoneId: e.milestone?.milestoneID || null,
+            contractId: e.milestone?.contract?.contractID || null,
+            depositAmount,
+            paymentShare,
+            paymentStatus,
+            transactionRef: e.transactionReference || null,
+            depositDate: formatDate(e.depositDate),
+            releaseDate: formatDate(e.releaseDate),
+          };
+        });
 
-      useEffect(() => {
-        fetchEscrows();
-      }, [addToast]);
-
-      const handleRefresh = async () => {
-        setIsRefreshing(true);
-        try {
-          await fetchEscrows();
-        } finally {
-          setIsRefreshing(false);
-        }
-      };
+        setEarningsTransactions(txns);
+      } catch (err) {
+        console.error("Failed to load earnings:", err);
+        addToast(err?.response?.data?.message || "Failed to load earnings.", "error");
+        setEarningsTransactions([]);
       } finally {
         setIsLoading(false);
       }
@@ -163,61 +152,33 @@ function Earnings() {
         <header
           className="anim-fade-in-up"
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-end",
-            flexWrap: "wrap",
-            gap: "1rem",
             marginBottom: "3rem",
             position: "relative",
             zIndex: 1,
           }}
         >
-          <div>
-            <h1
-              style={{
-                fontFamily: "var(--font-headline)",
-                fontSize: "clamp(2rem, 4vw, 3.5rem)",
-                fontWeight: 700,
-                letterSpacing: "-0.04em",
-                color: "var(--color-on-surface)",
-                lineHeight: 1,
-                marginBottom: "0.75rem",
-              }}
-            >
-              {pageTitle}
-            </h1>
-            <p
-              style={{
-                color: "var(--color-secondary)",
-                fontFamily: "var(--font-body)",
-                fontSize: "0.9rem",
-              }}
-            >
-              Escrow transactions and payment history
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
+          <h1
             style={{
-              padding: "0.6rem 1.4rem",
-              background: "transparent",
-              color: "var(--color-on-surface)",
-              border: "1px solid var(--color-outline-variant)",
-              cursor: isRefreshing ? "not-allowed" : "pointer",
               fontFamily: "var(--font-headline)",
+              fontSize: "clamp(2rem, 4vw, 3.5rem)",
               fontWeight: 700,
-              fontSize: "0.75rem",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              borderRadius: "999px",
-              opacity: isRefreshing ? 0.6 : 1,
+              letterSpacing: "-0.04em",
+              color: "var(--color-on-surface)",
+              lineHeight: 1,
+              marginBottom: "0.75rem",
             }}
           >
-            {isRefreshing ? "Refreshing..." : "Refresh"}
-          </button>
+            {pageTitle}
+          </h1>
+          <p
+            style={{
+              color: "var(--color-secondary)",
+              fontFamily: "var(--font-body)",
+              fontSize: "0.9rem",
+            }}
+          >
+            Escrow transactions and payment history
+          </p>
         </header>
 
         {isLoading ? (

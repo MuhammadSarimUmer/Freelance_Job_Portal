@@ -17,7 +17,6 @@ function Escrow() {
   const [fundableMilestones, setFundableMilestones] = useState([]);
   const [activeTab, setActiveTab] = useState("All");
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [processingEscrowId, setProcessingEscrowId] = useState(null);
   const [escrowModalOpen, setEscrowModalOpen] = useState(false);
   const [selectedMilestoneId, setSelectedMilestoneId] = useState("");
@@ -121,15 +120,6 @@ function Escrow() {
   useEffect(() => {
     fetchEscrows();
   }, [addToast]);
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      await fetchEscrows();
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
 
   const handleRelease = async (escrowId) => {
     if (!escrowId) return;
@@ -308,18 +298,6 @@ function Escrow() {
               onClick={() => navigate("/milestones")}
             >
               Open Milestones
-            </button>
-            <button
-              type="button"
-              className="escrow-action"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              style={{
-                opacity: isRefreshing ? 0.6 : 1,
-                cursor: isRefreshing ? "not-allowed" : "pointer",
-              }}
-            >
-              {isRefreshing ? "Refreshing..." : "Refresh"}
             </button>
           </div>
         </header>

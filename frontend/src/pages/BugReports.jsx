@@ -14,7 +14,6 @@ function BugReports() {
   const { addToast } = useToast();
 
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [contracts, setContracts] = useState([]);
   const [bugReportsData, setBugReportsData] = useState([]);
   const [updatingBugId, setUpdatingBugId] = useState(null);
@@ -146,40 +145,30 @@ function BugReports() {
     }
   };
 
-  const loadBugReports = async ({ showLoader = true } = {}) => {
-    if (showLoader) setIsLoading(true);
-    try {
-      const res = await contractService.getMyContracts();
-      const cs = res.data?.data || [];
-      setContracts(cs);
-      await fetchBugReports(cs);
-
-      setNewBug((prev) => {
-        if (prev.contractId || cs.length === 0) return prev;
-        return { ...prev, contractId: cs[0].contractID };
-      });
-    } catch (err) {
-      console.error("Failed to load bug reports:", err);
-      addToast(err?.response?.data?.message || "Failed to load bug reports.", "error");
-      setBugReportsData([]);
-      setContracts([]);
-    } finally {
-      if (showLoader) setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadBugReports();
-  }, [addToast]);
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const res = await contractService.getMyContracts();
+        const cs = res.data?.data || [];
+        setContracts(cs);
+        await fetchBugReports(cs);
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      await loadBugReports({ showLoader: false });
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
+        if (!newBug.contractId && cs.length > 0) {
+          setNewBug((prev) => ({ ...prev, contractId: cs[0].contractID }));
+        }
+      } catch (err) {
+        console.error("Failed to load bug reports:", err);
+        addToast(err?.response?.data?.message || "Failed to load bug reports.", "error");
+        setBugReportsData([]);
+        setContracts([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const handleUpdateStatus = async (bugId, status) => {
     if (!bugId) return;
@@ -331,57 +320,34 @@ function BugReports() {
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
-            {/* Report New Bug Button */}
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className={showForm ? "" : "signature-cta"}
-              style={{
-                padding: "0.875rem 2rem",
-                background: showForm ? "var(--color-surface-container-highest)" : "transparent",
-                color: showForm ? "var(--color-secondary)" : "var(--color-on-primary-container)",
-                fontFamily: "var(--font-headline)",
-                fontWeight: 700,
-                border: "none",
-                cursor: "pointer",
-                fontSize: "0.875rem",
-                transition: "all 0.2s",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                borderRadius: "4px"
-              }}
+          {/* Report New Bug Button */}
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className={showForm ? "" : "signature-cta"}
+            style={{
+              padding: "0.875rem 2rem",
+              background: showForm ? "var(--color-surface-container-highest)" : "transparent",
+              color: showForm ? "var(--color-secondary)" : "var(--color-on-primary-container)",
+              fontFamily: "var(--font-headline)",
+              fontWeight: 700,
+              border: "none",
+              cursor: "pointer",
+              fontSize: "0.875rem",
+              transition: "all 0.2s",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              borderRadius: "4px"
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "1.1rem" }}
             >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "1.1rem" }}
-              >
-                {showForm ? "close" : "add"}
-              </span>
-              {showForm ? "Cancel" : "Report Bug"}
-            </button>
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              style={{
-                padding: "0.6rem 1.4rem",
-                background: "transparent",
-                color: "var(--color-on-surface)",
-                border: "1px solid var(--color-outline-variant)",
-                cursor: isRefreshing ? "not-allowed" : "pointer",
-                fontFamily: "var(--font-headline)",
-                fontWeight: 700,
-                fontSize: "0.75rem",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                borderRadius: "999px",
-                opacity: isRefreshing ? 0.6 : 1,
-              }}
-            >
-              {isRefreshing ? "Refreshing..." : "Refresh"}
-            </button>
-          </div>
+              {showForm ? "close" : "add"}
+            </span>
+            {showForm ? "Cancel" : "Report Bug"}
+          </button>
         </header>
 
         {isLoading ? (
