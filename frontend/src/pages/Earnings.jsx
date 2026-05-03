@@ -13,7 +13,7 @@ function Earnings() {
   const [activeTab, setActiveTab] = useState("All");
   const { addToast } = useToast();
   const { user } = useAuth();
-  const isClient = user?.role === "CLIENT";
+  const isClient = user?.role === "CLIENT" || Boolean(user?.client);
   const pageTitle = isClient ? "Transactions" : "Earnings";
 
   const [earningsTransactions, setEarningsTransactions] = useState([]);
@@ -61,6 +61,7 @@ function Earnings() {
             milestoneTitle: e.milestone?.title || "Milestone",
             milestoneId: e.milestone?.milestoneID || null,
             contractId: e.milestone?.contract?.contractID || null,
+            contractTitle: e.milestone?.contract?.title || null,
             depositAmount,
             paymentShare,
             paymentStatus,
@@ -519,7 +520,7 @@ function Earnings() {
                           fontFamily: "var(--font-body)",
                         }}
                       >
-                        {txn.contractId}
+                        {txn.contractTitle || txn.contractId || "Contract"}
                       </span>
                     </td>
 

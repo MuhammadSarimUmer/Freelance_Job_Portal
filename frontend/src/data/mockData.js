@@ -20,7 +20,7 @@ export const clientNav = [
   { icon: "bug_report", label: "Bug Reports", path: "/bug-reports" },
   { icon: "celebration", label: "Milestones", path: "/milestones" },
   { icon: "lock", label: "Escrow", path: "/escrow" },
-  { icon: "payments", label: "Earnings", path: "/earnings" },
+  { icon: "payments", label: "Transactions", path: "/earnings" },
   { icon: "settings", label: "Settings", path: "/settings" },
 ];
 
