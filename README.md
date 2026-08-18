@@ -4,6 +4,7 @@ A full-stack freelance marketplace where clients can post contracts, invite deve
 
 Live app:
 - https://freelance-job-portal-eight.vercel.app/
+NOTE: BACKEND MAYBE DOWN SINCE IT WAS DEPLOYED ON A FREE RAILWAY SERVICE
 
 ## Why This Project Exists
 
